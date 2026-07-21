@@ -207,6 +207,10 @@ input[type="number"], input[type="text"], input[type="search"] {
   margin: 10px 0;
 }
 
+.card-entry-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.roster-card-actions { display: flex; gap: 8px; }
+.roster-card-actions .btn { flex: 1; }
+
 .card-entry-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -513,6 +517,94 @@ input[type="number"], input[type="text"], input[type="search"] {
   font-size: 0.85rem;
   color: #555;
 }
+
+/* Printable bingo card (4x6 index card, landscape) */
+.card-print-area { display: none; }
+
+@page card-page {
+  size: 6in 4in;
+  margin: 0;
+}
+
+@media print {
+  body.printing-card > *:not(#cardPrintArea) { display: none !important; }
+  body.printing-card #cardPrintArea { display: block !important; }
+}
+
+.card-print-page {
+  page: card-page;
+  page-break-after: always;
+  width: 6in;
+  height: 4in;
+  box-sizing: border-box;
+  padding: 0.22in 0.3in;
+  color: #1a1300;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.card-print-page:last-child { page-break-after: auto; }
+
+.card-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.12in;
+}
+.card-brand {
+  font-weight: 900;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+}
+.card-brand span { color: #b8860b; }
+.card-holder { text-align: right; font-size: 0.8rem; color: #444; }
+.card-holder strong { display: block; font-size: 0.95rem; color: #1a1300; }
+
+.card-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: auto repeat(5, 1fr);
+  gap: 4px;
+}
+.card-grid .col-header {
+  text-align: center;
+  font-weight: 900;
+  font-size: 1rem;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 4px;
+  padding: 3px 0;
+}
+.card-grid .num-cell, .card-grid .free-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #999;
+  border-radius: 4px;
+  font-weight: 800;
+  font-size: 1.15rem;
+}
+.card-grid .free-cell {
+  background: #ffd60a;
+  color: #1a1300;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.card-back { text-align: center; height: 100%; display: flex; flex-direction: column; }
+.card-back .card-brand-row { justify-content: center; margin-bottom: 0.08in; }
+.card-back h3 { margin: 0 0 6px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; }
+.card-rules {
+  list-style: none;
+  margin: 0 0 0.1in;
+  padding: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.card-rules li { margin-bottom: 2px; }
+.card-thanks { font-size: 0.75rem; color: #333; line-height: 1.4; margin: 0 0 0.08in; flex: 1; }
+.card-footer-note { font-size: 0.78rem; font-weight: 700; margin: 0; }
 
 @media (max-width: 600px) {
   input[type="number"], input[type="text"] { width: 100%; }

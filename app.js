@@ -56,6 +56,33 @@
     return card;
   }
 
+  function randomUniqueNumbers(min, max, count) {
+    const pool = [];
+    for (let n = min; n <= max; n++) pool.push(n);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, count).sort((a, b) => a - b);
+  }
+
+  // Standard 75-ball bingo numbering: 5 unique numbers per column drawn from
+  // that column's range (B 1-15, I 16-30, N 31-45, G 46-60, O 61-75), with the
+  // N column's center cell left FREE (only 4 numbers needed there).
+  function generateRandomCard() {
+    const card = {};
+    COLUMNS.forEach(col => {
+      const [min, max] = COLUMN_RANGES[col];
+      if (col === "N") {
+        const nums = randomUniqueNumbers(min, max, 4);
+        card.N = [nums[0], nums[1], FREE, nums[2], nums[3]];
+      } else {
+        card[col] = randomUniqueNumbers(min, max, 5);
+      }
+    });
+    return card;
+  }
+
   function findCustomer(id) {
     return state.customers.find(c => c.id === id);
   }
@@ -308,6 +335,7 @@
     statusEl.textContent = complete ? "Card ready ✓" : `${filled}/24 numbers entered`;
     statusEl.classList.toggle("complete", complete);
     document.getElementById("startRoundBtn").disabled = !complete;
+    document.getElementById("printCardBtn").disabled = !complete;
   }
 
   function renderCardEntryGrid(customer) {
@@ -340,7 +368,7 @@
           const n = parseInt(input.value, 10);
           if (input.value === "") {
             setCardCell(customer.id, col, row, null);
-            renderCustomerPanel();
+            render();
             return;
           }
           if (!Number.isInteger(n) || n < min || n > max) {
@@ -349,7 +377,7 @@
             return;
           }
           setCardCell(customer.id, col, row, n);
-          renderCustomerPanel();
+          render();
         });
         grid.appendChild(input);
       });
@@ -510,6 +538,10 @@
         switchTab("game");
         render();
       });
+
+      const printCardBtn = node.querySelector(".print-card-btn");
+      printCardBtn.disabled = filled !== 24;
+      printCardBtn.addEventListener("click", () => printCard(customer));
 
       list.appendChild(node);
     });
@@ -757,8 +789,65 @@
     window.print();
   }
 
+  // ---------- Printable bingo card (front/back, 4x6 index card) ----------
+
+  function cardGridHTML(customer) {
+    let html = "";
+    COLUMNS.forEach(col => { html += `<div class="col-header">${col}</div>`; });
+    for (let row = 0; row < 5; row++) {
+      COLUMNS.forEach(col => {
+        const value = customer.card[col][row];
+        if (value === FREE) {
+          html += `<div class="free-cell">FREE</div>`;
+        } else {
+          html += `<div class="num-cell">${value === null ? "" : value}</div>`;
+        }
+      });
+    }
+    return html;
+  }
+
+  function cardFrontHTML(customer) {
+    const dateStr = new Date().toLocaleDateString();
+    return `
+      <div class="card-print-page card-front">
+        <div class="card-brand-row">
+          <div class="card-brand">RAC <span>BINGO</span></div>
+          <div class="card-holder"><strong>${escapeHtml(customer.name)}</strong>${dateStr}</div>
+        </div>
+        <div class="card-grid">${cardGridHTML(customer)}</div>
+      </div>`;
+  }
+
+  function cardBackHTML() {
+    return `
+      <div class="card-print-page card-back">
+        <div class="card-brand-row">
+          <div class="card-brand">RAC <span>BINGO</span></div>
+        </div>
+        <h3>How To Win</h3>
+        <ul class="card-rules">
+          <li><strong>Any Line</strong> (row, column, or diagonal) — $25 RAC Cash</li>
+          <li><strong>Four Corners</strong> — $75 RAC Cash</li>
+          <li><strong>Full Card (Blackout)</strong> — $100 RAC Cash</li>
+        </ul>
+        <p class="card-thanks">
+          Thanks for playing RACBINGO! We love having you with us — bring this card back each
+          week for your next chance to win great RAC Cash rewards.
+        </p>
+        <p class="card-footer-note">— Your Rent-A-Center Team</p>
+      </div>`;
+  }
+
+  function printCard(customer) {
+    document.getElementById("cardPrintArea").innerHTML = cardFrontHTML(customer) + cardBackHTML();
+    document.body.classList.add("printing-card");
+    window.print();
+  }
+
   window.addEventListener("afterprint", () => {
     document.body.classList.remove("printing-cert");
+    document.body.classList.remove("printing-card");
   });
 
   // ---------- Export / Import ----------
@@ -833,6 +922,7 @@
     const btn = e.target.closest(".tab-btn");
     if (!btn) return;
     switchTab(btn.dataset.tab);
+    render();
   });
 
   const searchInput = document.getElementById("customerSearchInput");
@@ -854,6 +944,23 @@
     if (!customer || !cardComplete(customer)) return;
     startRound(selectedCustomerId);
     render();
+  });
+
+  document.getElementById("generateCardBtn").addEventListener("click", () => {
+    if (!selectedCustomerId) return;
+    const customer = findCustomer(selectedCustomerId);
+    if (!customer) return;
+    if (cardFilledCount(customer) > 0 && !confirm("This will overwrite the current card numbers. Continue?")) return;
+    customer.card = generateRandomCard();
+    saveData();
+    render();
+  });
+
+  document.getElementById("printCardBtn").addEventListener("click", () => {
+    if (!selectedCustomerId) return;
+    const customer = findCustomer(selectedCustomerId);
+    if (!customer || !cardComplete(customer)) return;
+    printCard(customer);
   });
 
   document.getElementById("drawForm").addEventListener("submit", e => {

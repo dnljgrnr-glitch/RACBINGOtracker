@@ -43,7 +43,11 @@
       <p id="weeklyAlert" class="weekly-alert" hidden></p>
 
       <h3 class="section-heading">This Week's Card Numbers</h3>
-      <p class="hint-text">Enter all 24 numbers from their physical card (5 per column; the center is always free).</p>
+      <p class="hint-text">Generate a random valid card, or enter all 24 numbers from a physical card by hand (5 per column; the center is always free).</p>
+      <div class="card-entry-actions">
+        <button type="button" id="generateCardBtn" class="btn btn-ghost">🎲 Generate Random Card</button>
+        <button type="button" id="printCardBtn" class="btn btn-ghost" disabled>🖨 Print Card (Front/Back)</button>
+      </div>
       <div class="card-entry-grid" id="cardEntryGrid"></div>
       <p id="cardEntryStatus" class="card-entry-status"></p>
 
@@ -112,7 +116,10 @@
     <div class="card-status"></div>
     <div class="last-played"></div>
     <div class="reward-badge" hidden></div>
-    <button type="button" class="btn btn-ghost btn-sm play-btn">Play Round</button>
+    <div class="roster-card-actions">
+      <button type="button" class="btn btn-ghost btn-sm print-card-btn">Print Card</button>
+      <button type="button" class="btn btn-ghost btn-sm play-btn">Play Round</button>
+    </div>
   </article>
 </template>
 
@@ -146,6 +153,8 @@
     </div>
   </div>
 </div>
+
+<div id="cardPrintArea" class="card-print-area"></div>
 
 <script src="app.js"></script>
 </body>

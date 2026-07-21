@@ -14,8 +14,16 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   customers show up as you type (with a "played this week" badge if relevant); if there's no
   match, an "Add as new customer" option appears.
 - **Enter their card** — every customer needs a fresh set of 24 numbers entered each week
-  (5 per column, center is always free) before a round can start. Previous numbers are
-  pre-filled as a starting point if you're re-entering the same customer.
+  (5 per column, center is always free) before a round can start. Click **Generate Random
+  Card** to have the app deal a valid card automatically (5 unique numbers per column, drawn
+  from that column's official range, with the center free), or enter one by hand from a
+  physical card. Previous numbers are pre-filled as a starting point if you're re-entering
+  the same customer.
+- **Print the card** — once a card is complete, **Print Card (Front/Back)** opens the print
+  dialog for a 4x6 index card (landscape): the front has the customer's name, date, and their
+  B-I-N-G-O grid; the back has the prize rules and a short thank-you note. Print the front,
+  flip the card over, then print the back (most printers don't duplex index card stock
+  automatically). Also available anytime later from the Roster tab for reprints.
 - **Weekly alert** — since each customer is meant to play once a week, selecting someone who
   already played in the last 7 days shows a clear warning banner. It doesn't block you from
   starting a round anyway — it's a heads-up, not a hard stop.
@@ -90,3 +98,6 @@ copy outside the browser.
 - The $25 / $75 / $100 voucher graphics on the printable certificate are a coded recreation
   of the RAC Cash template's look (not the literal scanned artwork), since those exact
   denominations aren't among the pre-printed vouchers you provided.
+- The printable card's 4x6 landscape page size is set via a named CSS page (`@page
+  card-page`), which is well supported in Chrome/Edge. If you print from a browser that
+  ignores it, just set the paper size to 4x6 (or "Index Card") manually in the print dialog.
