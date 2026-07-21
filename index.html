@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>RACBINGO Tracker</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="app-header">
+  <h1>RACBINGO <span>Tracker</span></h1>
+  <nav class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="game">Play Round</button>
+    <button class="tab-btn" data-tab="roster">Roster</button>
+    <button class="tab-btn" data-tab="history">History</button>
+  </nav>
+</header>
+
+<div class="prize-legend">
+  <span>Line (row / column / diagonal) = <strong>$25</strong></span>
+  <span>Four Corners = <strong>$75</strong></span>
+  <span>Full BINGO = <strong>$100</strong></span>
+</div>
+
+<main id="app">
+
+  <!-- PLAY ROUND TAB -->
+  <section id="tab-game" class="tab-panel active">
+
+    <div id="roundPicker" class="round-picker">
+      <h2 class="section-heading">Start a Round</h2>
+      <p class="hint-text">The ball pool always resets to a full 75 between customers. Pick who's up.</p>
+      <div class="call-row">
+        <select id="roundCustomerSelect"></select>
+        <button type="button" id="startRoundBtn" class="btn btn-primary btn-big">Start Round</button>
+      </div>
+      <p id="roundPickerHint" class="field-error" hidden></p>
+      <p id="noCustomersForRound" class="empty-state" hidden>
+        No customers with a completed card yet. Add one (and fill in their full card) in the Roster tab first.
+      </p>
+    </div>
+
+    <div id="activeRound" class="active-round" hidden>
+      <div class="game-top">
+        <div>
+          <h2 id="activeCustomerName" class="active-customer-name"></h2>
+          <div class="draw-progress" id="drawProgress">0 of 5 balls drawn</div>
+        </div>
+        <button type="button" id="endRoundBtn" class="btn btn-danger-outline">End Round / Next Customer</button>
+      </div>
+
+      <form id="drawForm" class="call-form" autocomplete="off">
+        <label for="drawInput">Pull a ball</label>
+        <div class="call-row">
+          <input type="number" id="drawInput" min="1" max="75" placeholder="1-75" inputmode="numeric" autofocus>
+          <button type="submit" class="btn btn-primary btn-big">Draw</button>
+          <button type="button" id="undoDrawBtn" class="btn btn-ghost">Undo Last Draw</button>
+        </div>
+        <p id="drawError" class="field-error" hidden></p>
+      </form>
+
+      <div class="drawn-balls" id="drawnBalls"></div>
+
+      <h2 class="section-heading">Card</h2>
+      <div class="mini-grid active-round-grid" id="activeRoundGrid"></div>
+    </div>
+
+  </section>
+
+  <!-- ROSTER TAB -->
+  <section id="tab-roster" class="tab-panel">
+    <form id="addCustomerForm" class="add-customer-form" autocomplete="off">
+      <label for="newCustomerName">Customer name</label>
+      <div class="call-row">
+        <input type="text" id="newCustomerName" placeholder="Full name" required>
+        <button type="submit" class="btn btn-primary">Add Customer</button>
+      </div>
+    </form>
+
+    <div class="data-actions">
+      <button id="exportJsonBtn" class="btn btn-ghost">Export Backup (JSON)</button>
+      <button id="exportCsvBtn" class="btn btn-ghost">Export Winners (CSV)</button>
+      <label class="btn btn-ghost file-label">
+        Import Backup
+        <input type="file" id="importInput" accept="application/json" hidden>
+      </label>
+    </div>
+
+    <div class="roster-list" id="rosterList"></div>
+    <p id="noCustomersRoster" class="empty-state" hidden>No customers yet. Add one above.</p>
+  </section>
+
+  <!-- HISTORY TAB -->
+  <section id="tab-history" class="tab-panel">
+    <div class="history-summary" id="historySummary"></div>
+    <div class="history-list" id="historyList"></div>
+    <p id="noHistory" class="empty-state" hidden>No completed rounds yet.</p>
+  </section>
+
+</main>
+
+<template id="customerCardTemplate">
+  <article class="customer-card">
+    <header class="customer-card-header">
+      <input type="text" class="customer-name-input" />
+      <button type="button" class="btn btn-remove" title="Remove customer">&times;</button>
+    </header>
+    <div class="card-status"></div>
+    <div class="mini-grid"></div>
+  </article>
+</template>
+
+<div id="winModalOverlay" class="win-modal-overlay" hidden>
+  <canvas id="fireworksCanvas"></canvas>
+  <div class="win-modal-card">
+    <div class="win-modal-emoji">🎉</div>
+    <h2 id="winModalTitle">BINGO!</h2>
+    <p id="winModalSubtitle"></p>
+    <div class="win-modal-amount" id="winModalAmount"></div>
+    <button type="button" id="winModalAckBtn" class="btn btn-primary btn-big">Notify Customer ✓</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
