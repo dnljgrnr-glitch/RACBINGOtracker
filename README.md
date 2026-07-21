@@ -65,7 +65,10 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   rechecked against the edited data, so prizes stay accurate — a pattern that still holds
   keeps its original redeemed status; one that no longer holds is dropped.
 - **Help tab** — a full, step-by-step reference for every feature in the app, written for
-  quick lookup at the table.
+  quick lookup at the table. It ends with a **Tips & Scripts** section: ready-to-use lines
+  for introducing the game, announcing a win, and pitching a promotion, plus an example
+  tiered bonus-draw structure (e.g. 2 weeks down = 2x draws, a month down = 3 draws + 1
+  bonus draw) and tips for running it in practice.
 
 ## Features
 
