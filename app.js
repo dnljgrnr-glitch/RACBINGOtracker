@@ -43,6 +43,7 @@
   let state = loadData();
   let selectedCustomerId = null;
   const expandedCustomerIds = new Set();
+  const editingRoundIds = new Set();
 
   // ---------- Helpers ----------
 
@@ -190,8 +191,20 @@
   function startRound(customerId) {
     const customer = findCustomer(customerId);
     if (!customer) return;
+    const previousLastPlayedAt = customer.lastPlayedAt;
     customer.lastPlayedAt = Date.now();
-    state.currentRound = { customerId, draws: [], wins: [], startedAt: Date.now() };
+    state.currentRound = { customerId, draws: [], wins: [], startedAt: Date.now(), previousLastPlayedAt };
+    saveData();
+  }
+
+  // Discards the in-progress round without saving anything to History — for
+  // when the wrong customer was pulled up by mistake and nothing valid
+  // should be recorded. Restores their prior "last played" timestamp too.
+  function cancelRound() {
+    if (!state.currentRound) return;
+    const customer = findCustomer(state.currentRound.customerId);
+    if (customer) customer.lastPlayedAt = state.currentRound.previousLastPlayedAt || null;
+    state.currentRound = null;
     saveData();
   }
 
@@ -224,9 +237,13 @@
     return true;
   }
 
-  function undoLastDraw() {
-    if (!state.currentRound || state.currentRound.draws.length === 0) return;
-    state.currentRound.draws.pop();
+  // Removes one specific drawn ball from the active round (not just the most
+  // recent), for correcting a misread/mistyped number without losing the
+  // rest of the round. Rechecks win patterns against the remaining draws.
+  function removeDrawAt(index) {
+    if (!state.currentRound) return;
+    if (index < 0 || index >= state.currentRound.draws.length) return;
+    state.currentRound.draws.splice(index, 1);
     const customer = findCustomer(state.currentRound.customerId);
     if (customer) {
       const matrix = hitMatrix(customer, drawnSet());
@@ -234,6 +251,11 @@
       state.currentRound.wins = state.currentRound.wins.filter(w => stillValid.includes(w.pattern));
     }
     saveData();
+  }
+
+  function undoLastDraw() {
+    if (!state.currentRound || state.currentRound.draws.length === 0) return;
+    removeDrawAt(state.currentRound.draws.length - 1);
   }
 
   const pendingWinPopups = [];
@@ -283,6 +305,76 @@
     saveData();
     selectedCustomerId = round.customerId;
     switchTab("game");
+    render();
+  }
+
+  // ---------- Editing past rounds (mistake corrections) ----------
+
+  // Rebuilds a round's wins from scratch against its card + current draws.
+  // Patterns that still hold keep their original redeemed status/timestamp;
+  // patterns that no longer hold are dropped; newly-created patterns start
+  // unredeemed.
+  function recomputeRoundWins(round) {
+    if (!round.card) { round.wins = []; return; }
+    const drawn = new Set(round.draws);
+    const matrix = hitMatrix({ card: round.card }, drawn);
+    const patterns = achievedPatterns(matrix);
+    round.wins = patterns.map(pattern => {
+      const existing = round.wins.find(w => w.pattern === pattern);
+      if (existing) return existing;
+      const tier = tierFor(pattern);
+      return { pattern, prize: tier.prize, label: tier.label, timestamp: Date.now(), redeemed: false, redeemedAt: null };
+    });
+  }
+
+  function reassignRoundCustomer(roundId, newCustomerId) {
+    const round = state.history.find(r => r.id === roundId);
+    const newCustomer = findCustomer(newCustomerId);
+    if (!round || !newCustomer) return;
+    round.customerId = newCustomer.id;
+    round.customerName = newCustomer.name;
+    round.card = JSON.parse(JSON.stringify(newCustomer.card));
+    recomputeRoundWins(round);
+    saveData();
+    render();
+  }
+
+  function addDrawToRound(roundId, num) {
+    const round = state.history.find(r => r.id === roundId);
+    const errEl = document.getElementById(`roundDrawError-${roundId}`);
+    if (!round) return;
+    if (errEl) errEl.hidden = true;
+    if (round.draws.length >= BALLS_PER_ROUND) {
+      if (errEl) { errEl.textContent = `A round can only have ${BALLS_PER_ROUND} balls.`; errEl.hidden = false; }
+      return;
+    }
+    if (!Number.isInteger(num) || num < 1 || num > 75) {
+      if (errEl) { errEl.textContent = "Enter a number between 1 and 75."; errEl.hidden = false; }
+      return;
+    }
+    if (round.draws.includes(num)) {
+      if (errEl) { errEl.textContent = `${num} is already in this round.`; errEl.hidden = false; }
+      return;
+    }
+    round.draws.push(num);
+    recomputeRoundWins(round);
+    saveData();
+    render();
+  }
+
+  function removeDrawFromRound(roundId, index) {
+    const round = state.history.find(r => r.id === roundId);
+    if (!round) return;
+    round.draws.splice(index, 1);
+    recomputeRoundWins(round);
+    saveData();
+    render();
+  }
+
+  function deleteRound(roundId) {
+    state.history = state.history.filter(r => r.id !== roundId);
+    editingRoundIds.delete(roundId);
+    saveData();
     render();
   }
 
@@ -411,16 +503,24 @@
     const chipsWrap = document.getElementById("drawnBalls");
     chipsWrap.innerHTML = "";
     for (let i = 0; i < BALLS_PER_ROUND; i++) {
-      const chip = document.createElement("div");
       const num = state.currentRound.draws[i];
       if (num !== undefined) {
-        chip.className = "ball-chip";
-        chip.textContent = num;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "ball-chip removable";
+        chip.title = "Click to remove this ball";
+        chip.innerHTML = `${num}<span class="ball-chip-x">&times;</span>`;
+        chip.addEventListener("click", () => {
+          removeDrawAt(i);
+          render();
+        });
+        chipsWrap.appendChild(chip);
       } else {
+        const chip = document.createElement("div");
         chip.className = "ball-chip empty-slot";
         chip.textContent = "–";
+        chipsWrap.appendChild(chip);
       }
-      chipsWrap.appendChild(chip);
     }
 
     const drawInput = document.getElementById("drawInput");
@@ -438,6 +538,8 @@
       row.textContent = `🏆 ${w.label} — $${w.prize} RACCASH`;
       winsList.appendChild(row);
     });
+
+    renderReadOnlyGrid(document.getElementById("activeRoundGrid"), customer, drawnSet());
   }
 
   // ---------- Customer search ----------
@@ -574,12 +676,11 @@
     });
   }
 
-  function renderCardValidation(container, customer) {
-    const grid = container.querySelector(".validation-grid");
-    const progression = container.querySelector(".validation-progression");
-    const drawn = relevantDrawsFor(customer);
+  // Shared read-only grid renderer used both for roster card validation and
+  // the live progress view during an active round.
+  function renderReadOnlyGrid(grid, customer, drawn) {
+    if (!grid) return;
     const matrix = hitMatrix(customer, drawn);
-
     grid.innerHTML = "";
     COLUMNS.forEach(col => {
       const h = document.createElement("div");
@@ -597,6 +698,13 @@
         grid.appendChild(cell);
       });
     }
+  }
+
+  function renderCardValidation(container, customer) {
+    const grid = container.querySelector(".validation-grid");
+    const progression = container.querySelector(".validation-progression");
+    const drawn = relevantDrawsFor(customer);
+    renderReadOnlyGrid(grid, customer, drawn);
 
     const rounds = roundsFor(customer.id);
     progression.innerHTML = "";
@@ -648,14 +756,33 @@
       const item = document.createElement("div");
       item.className = "history-item";
 
+      const headerRow = document.createElement("div");
+      headerRow.className = "history-item-header";
       const h4 = document.createElement("h4");
       h4.textContent = `${round.customerName} — ${new Date(round.startedAt).toLocaleString()}`;
-      item.appendChild(h4);
+      headerRow.appendChild(h4);
+
+      const editToggle = document.createElement("button");
+      editToggle.type = "button";
+      editToggle.className = "btn btn-ghost btn-sm";
+      const isEditing = editingRoundIds.has(round.id);
+      editToggle.textContent = isEditing ? "Done Editing" : "Edit Round";
+      editToggle.addEventListener("click", () => {
+        if (editingRoundIds.has(round.id)) editingRoundIds.delete(round.id);
+        else editingRoundIds.add(round.id);
+        render();
+      });
+      headerRow.appendChild(editToggle);
+      item.appendChild(headerRow);
 
       const meta = document.createElement("div");
       meta.className = "meta-line";
       meta.textContent = `Balls drawn: ${round.draws.join(", ") || "none"}`;
       item.appendChild(meta);
+
+      if (isEditing) {
+        item.appendChild(buildRoundEditPanel(round));
+      }
 
       if (round.wins.length === 0) {
         const none = document.createElement("div");
@@ -703,6 +830,83 @@
 
       list.appendChild(item);
     });
+  }
+
+  function buildRoundEditPanel(round) {
+    const panel = document.createElement("div");
+    panel.className = "round-edit-panel";
+
+    const reassignRow = document.createElement("div");
+    reassignRow.className = "round-edit-row";
+    const reassignLabel = document.createElement("label");
+    reassignLabel.textContent = "Reassign to customer:";
+    const select = document.createElement("select");
+    state.customers.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = c.name;
+      if (c.id === round.customerId) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener("change", () => reassignRoundCustomer(round.id, select.value));
+    reassignRow.appendChild(reassignLabel);
+    reassignRow.appendChild(select);
+    panel.appendChild(reassignRow);
+
+    const ballsLabel = document.createElement("label");
+    ballsLabel.textContent = "Balls drawn (click × to remove):";
+    panel.appendChild(ballsLabel);
+
+    const ballsWrap = document.createElement("div");
+    ballsWrap.className = "drawn-balls";
+    round.draws.forEach((num, idx) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "ball-chip removable";
+      chip.title = "Click to remove this ball";
+      chip.innerHTML = `${num}<span class="ball-chip-x">&times;</span>`;
+      chip.addEventListener("click", () => removeDrawFromRound(round.id, idx));
+      ballsWrap.appendChild(chip);
+    });
+    panel.appendChild(ballsWrap);
+
+    const addForm = document.createElement("form");
+    addForm.className = "call-row round-add-ball-form";
+    const addInput = document.createElement("input");
+    addInput.type = "number";
+    addInput.min = 1;
+    addInput.max = 75;
+    addInput.placeholder = "1-75";
+    const addBtn = document.createElement("button");
+    addBtn.type = "submit";
+    addBtn.className = "btn btn-ghost btn-sm";
+    addBtn.textContent = "Add Ball";
+    addForm.appendChild(addInput);
+    addForm.appendChild(addBtn);
+    addForm.addEventListener("submit", e => {
+      e.preventDefault();
+      addDrawToRound(round.id, parseInt(addInput.value, 10));
+    });
+    panel.appendChild(addForm);
+
+    const addError = document.createElement("p");
+    addError.className = "field-error";
+    addError.id = `roundDrawError-${round.id}`;
+    addError.hidden = true;
+    panel.appendChild(addError);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn btn-danger-outline btn-sm round-delete-btn";
+    deleteBtn.textContent = "Delete This Round";
+    deleteBtn.addEventListener("click", () => {
+      if (confirm(`Permanently delete this round for ${round.customerName}? This cannot be undone.`)) {
+        deleteRound(round.id);
+      }
+    });
+    panel.appendChild(deleteBtn);
+
+    return panel;
   }
 
   // ---------- Win celebration ----------
@@ -1141,6 +1345,13 @@
   document.getElementById("endRoundBtn").addEventListener("click", () => {
     if (confirm("End this round and move to the next customer?")) {
       endRound();
+      render();
+    }
+  });
+
+  document.getElementById("cancelRoundBtn").addEventListener("click", () => {
+    if (confirm("Cancel this round without saving anything? Use this if the wrong customer was pulled up.")) {
+      cancelRound();
       render();
     }
   });

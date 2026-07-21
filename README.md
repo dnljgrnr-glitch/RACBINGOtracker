@@ -35,7 +35,12 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   starting a round anyway — it's a heads-up, not a hard stop.
 - **Play the round** — the ball pool always resets to a full 75 before the next customer's
   turn. A round is up to 5 balls; entering a number that repeats one already pulled this
-  round is rejected ("reroll — draw again") and doesn't count against the 5.
+  round is rejected ("reroll — draw again") and doesn't count against the 5. A live,
+  read-only card grid on the Play Round screen highlights matches as you go. Click any
+  drawn ball to remove just that one, or click "Undo Last Draw" for the most recent.
+- **Cancel vs. End a round** — "End Round / Next Customer" saves the round to History.
+  "Cancel Round (Wrong Customer)" discards it entirely — for when the wrong customer was
+  pulled up by mistake — and restores their previous "last played" status untouched.
 - **Prizes**, checked live after every ball:
   - **Line** (any row, column, or diagonal) = **$25 RACCASH**
   - **Four Corners** = **$75 RACCASH**
@@ -54,6 +59,13 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   congratulatory message, a thank-you note from the team, and a staff redemption line at the
   bottom. Printing uses your browser's normal print dialog (Ctrl/Cmd+P equivalent, triggered
   automatically).
+- **Fixing mistakes** — every round in History can be edited at any time via "Edit Round":
+  reassign it to a different customer (for a wrong-name pull), add or remove individual
+  drawn balls (for an invalid entry), or delete the round outright. Wins are automatically
+  rechecked against the edited data, so prizes stay accurate — a pattern that still holds
+  keeps its original redeemed status; one that no longer holds is dropped.
+- **Help tab** — a full, step-by-step reference for every feature in the app, written for
+  quick lookup at the table.
 
 ## Features
 

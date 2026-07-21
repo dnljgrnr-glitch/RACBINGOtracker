@@ -13,6 +13,7 @@
     <button class="tab-btn active" data-tab="game">Play Round</button>
     <button class="tab-btn" data-tab="roster">Roster</button>
     <button class="tab-btn" data-tab="history">History</button>
+    <button class="tab-btn" data-tab="help">Help</button>
   </nav>
 </header>
 
@@ -60,7 +61,10 @@
           <h2 id="activeCustomerName" class="active-customer-name"></h2>
           <div class="draw-progress" id="drawProgress">0 of 5 balls drawn</div>
         </div>
-        <button type="button" id="endRoundBtn" class="btn btn-danger-outline">End Round / Next Customer</button>
+        <div class="game-top-actions">
+          <button type="button" id="cancelRoundBtn" class="btn btn-ghost">Cancel Round (Wrong Customer)</button>
+          <button type="button" id="endRoundBtn" class="btn btn-danger-outline">End Round / Next Customer</button>
+        </div>
       </div>
 
       <form id="drawForm" class="call-form" autocomplete="off">
@@ -71,6 +75,7 @@
           <button type="button" id="undoDrawBtn" class="btn btn-ghost">Undo Last Draw</button>
         </div>
         <p id="drawError" class="field-error" hidden></p>
+        <p class="hint-text">Click any drawn ball below to remove that specific one (for a misread or mistyped number).</p>
       </form>
 
       <div class="drawn-balls" id="drawnBalls"></div>
@@ -79,6 +84,9 @@
         <h3 class="section-heading">Wins This Round</h3>
         <div id="roundWinsList" class="round-wins-list"></div>
       </div>
+
+      <h3 class="section-heading">Live Card Progress</h3>
+      <div class="mini-grid-ro" id="activeRoundGrid"></div>
     </div>
 
   </section>
@@ -105,6 +113,80 @@
     <p id="noHistory" class="empty-state" hidden>No completed rounds yet.</p>
   </section>
 
+  <!-- HELP TAB -->
+  <section id="tab-help" class="tab-panel">
+    <div class="panel-box help-panel">
+
+      <h2 class="help-title">Finding or Adding a Customer</h2>
+      <ol>
+        <li>Go to <strong>Play Round</strong>.</li>
+        <li>Type the customer's name in the search box.</li>
+        <li>Click their name if they already exist, or click <strong>"+ Add ... as new customer"</strong> if they don't.</li>
+      </ol>
+
+      <h2 class="help-title">Setting Up Their Card</h2>
+      <ol>
+        <li>Once a customer is selected, click <strong>Generate Random Card</strong> for an instant valid card, or type in all 24 numbers by hand from a physical card.</li>
+        <li>Click <strong>Print Card (Front/Back)</strong> to hand them a physical copy — print the front, flip the card over, then print the back.</li>
+      </ol>
+
+      <h2 class="help-title">Starting and Playing a Round</h2>
+      <ol>
+        <li>Once the card shows <strong>"Card ready ✓"</strong>, click <strong>Start Round</strong>.</li>
+        <li>As each ball is called from the machine, type the number and click <strong>Draw</strong> (or press Enter).</li>
+        <li>If the same number gets pulled twice in one round, the app rejects it — just draw again. It doesn't count against the 5.</li>
+        <li>Made a mistake? Click any drawn ball to remove just that one, or click <strong>Undo Last Draw</strong> for the most recent one.</li>
+        <li>Watch the <strong>Live Card Progress</strong> grid — matched numbers highlight green as you go.</li>
+      </ol>
+
+      <h2 class="help-title">Wins and Celebrations</h2>
+      <ol>
+        <li>The app checks for a win after every ball — <strong>Line = $25</strong>, <strong>Four Corners = $75</strong>, <strong>Full BINGO = $100</strong>.</li>
+        <li>A win triggers fireworks and a popup. Click <strong>Print Certificate</strong> to hand the customer a redeemable certificate, then <strong>Notify Customer ✓</strong> to close it.</li>
+      </ol>
+
+      <h2 class="help-title">Ending or Canceling a Round</h2>
+      <ol>
+        <li>Click <strong>End Round / Next Customer</strong> when the customer is done playing — this saves their draws and any wins, and frees up the machine for the next person.</li>
+        <li>If you started a round for the <strong>wrong customer</strong> by mistake, click <strong>Cancel Round (Wrong Customer)</strong> instead — nothing gets saved, and their weekly play status is untouched.</li>
+      </ol>
+
+      <h2 class="help-title">Redeeming a Reward</h2>
+      <ol>
+        <li>Go to <strong>History</strong>.</li>
+        <li>Find the win and click <strong>Confirm Redemption &amp; New Card</strong> — this logs today's date and takes you straight to starting their next round.</li>
+        <li>Reprint a certificate anytime with <strong>Print Certificate</strong>, even after it's been redeemed.</li>
+      </ol>
+
+      <h2 class="help-title">Fixing Mistakes (Any Time)</h2>
+      <ol>
+        <li>In <strong>History</strong>, click <strong>Edit Round</strong> on any past round to reassign it to the correct customer, add or remove drawn balls, or delete the round entirely.</li>
+        <li>Editing balls automatically rechecks whether the round should show a win, so prizes stay accurate.</li>
+        <li>Deleting a round cannot be undone — double-check before confirming.</li>
+      </ol>
+
+      <h2 class="help-title">Checking a Customer's Card</h2>
+      <ol>
+        <li>In <strong>Roster</strong>, click <strong>View Card</strong> on any customer to see their numbers in the real grid layout — handy for double-checking against their physical card.</li>
+        <li>Below the grid, <strong>Progression</strong> lists every round they've played, what was drawn, and what they won.</li>
+      </ol>
+
+      <h2 class="help-title">Weekly Play Limit</h2>
+      <ol>
+        <li>Customers are meant to play once a week. If someone already played in the last 7 days, you'll see a warning banner when you select them.</li>
+        <li>It's a heads-up, not a hard stop — you can still start a round if there's a good reason to.</li>
+      </ol>
+
+      <h2 class="help-title">Backing Up Your Data</h2>
+      <ol>
+        <li>In <strong>Roster</strong>, click <strong>Export Backup (JSON)</strong> regularly to save a full copy of everything outside the browser.</li>
+        <li><strong>Export Winners (CSV)</strong> gives a spreadsheet-friendly list of every win for record-keeping.</li>
+        <li><strong>Import Backup</strong> restores from a previous JSON export — this replaces all current data, so use it carefully.</li>
+      </ol>
+
+    </div>
+  </section>
+
 </main>
 
 <template id="customerCardTemplate">
@@ -122,7 +204,7 @@
     </div>
     <button type="button" class="btn btn-ghost btn-sm view-card-btn">View Card ▾</button>
     <div class="card-validation" hidden>
-      <div class="validation-grid"></div>
+      <div class="mini-grid-ro validation-grid"></div>
       <h4 class="validation-heading">Progression</h4>
       <div class="validation-progression"></div>
     </div>
