@@ -42,6 +42,7 @@
 
   let state = loadData();
   let selectedCustomerId = null;
+  const expandedCustomerIds = new Set();
 
   // ---------- Helpers ----------
 
@@ -140,6 +141,20 @@
       round.wins.forEach(w => { if (!w.redeemed) wins.push(w); });
     });
     return wins;
+  }
+
+  function roundsFor(customerId) {
+    return state.history.filter(r => r.customerId === customerId);
+  }
+
+  // The draws to validate a customer's card against: their live round if one
+  // is in progress, otherwise their most recently completed round.
+  function relevantDrawsFor(customer) {
+    if (state.currentRound && state.currentRound.customerId === customer.id) {
+      return new Set(state.currentRound.draws);
+    }
+    const rounds = roundsFor(customer.id);
+    return rounds.length ? new Set(rounds[0].draws) : new Set();
   }
 
   // ---------- Customer CRUD ----------
@@ -543,8 +558,70 @@
       printCardBtn.disabled = filled !== 24;
       printCardBtn.addEventListener("click", () => printCard(customer));
 
+      const viewBtn = node.querySelector(".view-card-btn");
+      const validation = node.querySelector(".card-validation");
+      const expanded = expandedCustomerIds.has(customer.id);
+      viewBtn.textContent = expanded ? "Hide Card ▲" : "View Card ▾";
+      validation.hidden = !expanded;
+      if (expanded) renderCardValidation(validation, customer);
+      viewBtn.addEventListener("click", () => {
+        if (expandedCustomerIds.has(customer.id)) expandedCustomerIds.delete(customer.id);
+        else expandedCustomerIds.add(customer.id);
+        render();
+      });
+
       list.appendChild(node);
     });
+  }
+
+  function renderCardValidation(container, customer) {
+    const grid = container.querySelector(".validation-grid");
+    const progression = container.querySelector(".validation-progression");
+    const drawn = relevantDrawsFor(customer);
+    const matrix = hitMatrix(customer, drawn);
+
+    grid.innerHTML = "";
+    COLUMNS.forEach(col => {
+      const h = document.createElement("div");
+      h.className = "cell-header";
+      h.textContent = col;
+      grid.appendChild(h);
+    });
+    for (let row = 0; row < 5; row++) {
+      COLUMNS.forEach((col, colIdx) => {
+        const value = customer.card[col][row];
+        const cell = document.createElement("div");
+        const isHit = matrix[row][colIdx];
+        cell.className = "cell" + (value === FREE ? " free" : isHit ? " hit" : "");
+        cell.textContent = value === FREE ? "FREE" : (value === null ? "–" : value);
+        grid.appendChild(cell);
+      });
+    }
+
+    const rounds = roundsFor(customer.id);
+    progression.innerHTML = "";
+    if (state.currentRound && state.currentRound.customerId === customer.id) {
+      const live = document.createElement("div");
+      live.className = "progression-row live";
+      live.textContent = `In progress — ${state.currentRound.draws.length}/${BALLS_PER_ROUND} balls drawn: ${state.currentRound.draws.join(", ") || "none yet"}`;
+      progression.appendChild(live);
+    }
+    if (rounds.length === 0 && !state.currentRound) {
+      const none = document.createElement("div");
+      none.className = "progression-row empty";
+      none.textContent = "No rounds played yet.";
+      progression.appendChild(none);
+    } else {
+      rounds.forEach(round => {
+        const row = document.createElement("div");
+        row.className = "progression-row";
+        const winText = round.wins.length
+          ? round.wins.map(w => `${w.label} $${w.prize}${w.redeemed ? " (redeemed)" : ""}`).join(", ")
+          : "no win";
+        row.textContent = `${formatDate(round.startedAt)} — drew ${round.draws.join(", ") || "none"} — ${winText}`;
+        progression.appendChild(row);
+      });
+    }
   }
 
   // ---------- History ----------
@@ -791,16 +868,32 @@
 
   // ---------- Printable bingo card (front/back, 4x6 index card) ----------
 
-  function cardGridHTML(customer) {
+  const STORE_NAME = "RENT-A-CENTER";
+  const STORE_ADDRESS = "437 Hepburn St., Williamsport, PA 17701";
+  const STORE_PHONE = "(570) 322-4900";
+
+  function cardIdFor(customer) {
+    const code = customer.id.slice(-6).toUpperCase();
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const yy = String(d.getFullYear()).slice(-2);
+    return `RB-${code}-${mm}${dd}${yy}`;
+  }
+
+  function cardGridHTMLBranded(customer) {
     let html = "";
-    COLUMNS.forEach(col => { html += `<div class="col-header">${col}</div>`; });
+    COLUMNS.forEach(col => {
+      const red = col === "I" || col === "G";
+      html += `<div class="cf-col-header${red ? " red" : ""}">${col}</div>`;
+    });
     for (let row = 0; row < 5; row++) {
       COLUMNS.forEach(col => {
         const value = customer.card[col][row];
         if (value === FREE) {
-          html += `<div class="free-cell">FREE</div>`;
+          html += `<div class="cf-cell cf-free">★<br>FREE</div>`;
         } else {
-          html += `<div class="num-cell">${value === null ? "" : value}</div>`;
+          html += `<div class="cf-cell"><span>${value === null ? "" : value}</span><i class="cf-check"></i></div>`;
         }
       });
     }
@@ -811,31 +904,99 @@
     const dateStr = new Date().toLocaleDateString();
     return `
       <div class="card-print-page card-front">
-        <div class="card-brand-row">
-          <div class="card-brand">RAC <span>BINGO</span></div>
-          <div class="card-holder"><strong>${escapeHtml(customer.name)}</strong>${dateStr}</div>
+        <div class="cf-header">
+          <div class="cf-logo">
+            <div class="cf-logo-bars"></div>
+            <div class="cf-logo-text">RAC</div>
+            <div class="cf-logo-caption">Rent-A-Center</div>
+          </div>
+          <div class="cf-title">
+            <div class="cf-title-main">RAC <span>BINGO</span></div>
+            <div class="cf-title-sub">★ FREE WEEKLY CUSTOMER APPRECIATION PROGRAM ★</div>
+          </div>
+          <div class="cf-badge">
+            <div class="cf-badge-star">★</div>
+            <div class="cf-badge-text">LIMIT 1<br>PLAY<br>PER WEEK</div>
+          </div>
         </div>
-        <div class="card-grid">${cardGridHTML(customer)}</div>
+        <div class="cf-info-row">
+          <div class="cf-info"><span class="cf-info-icon">👤</span><div><div class="cf-info-label">CUSTOMER NAME</div><div class="cf-info-value">${escapeHtml(customer.name)}</div></div></div>
+          <div class="cf-info"><span class="cf-info-icon">📅</span><div><div class="cf-info-label">ISSUE DATE</div><div class="cf-info-value">${dateStr}</div></div></div>
+          <div class="cf-info"><span class="cf-info-icon">🪪</span><div><div class="cf-info-label">CARD ID</div><div class="cf-info-value">${cardIdFor(customer)}</div></div></div>
+        </div>
+        <div class="cf-grid">${cardGridHTMLBranded(customer)}</div>
+        <div class="cf-footer">
+          <span>📅 PLAY WEEKLY</span>
+          <span>💵 EARN RAC CASH</span>
+          <span>★ STAY CURRENT</span>
+          <span class="cf-footer-note">OFFICIAL STORE GAME CARD<br>PROPERTY OF RENT-A-CENTER</span>
+        </div>
       </div>`;
   }
 
   function cardBackHTML() {
     return `
-      <div class="card-print-page card-back">
-        <div class="card-brand-row">
-          <div class="card-brand">RAC <span>BINGO</span></div>
+      <div class="card-print-page card-back-v2">
+        <div class="cb-header">
+          <div class="cb-header-left">RAC <span>BINGO</span></div>
+          <div class="cb-header-right">HOW TO PLAY <span class="cb-stars">★ ★ ★ ★</span></div>
         </div>
-        <h3>How To Win</h3>
-        <ul class="card-rules">
-          <li><strong>Any Line</strong> (row, column, or diagonal) — $25 RAC Cash</li>
-          <li><strong>Four Corners</strong> — $75 RAC Cash</li>
-          <li><strong>Full Card (Blackout)</strong> — $100 RAC Cash</li>
-        </ul>
-        <p class="card-thanks">
-          Thanks for playing RACBINGO! We love having you with us — bring this card back each
-          week for your next chance to win great RAC Cash rewards.
-        </p>
-        <p class="card-footer-note">— Your Rent-A-Center Team</p>
+
+        <div class="cb-steps">
+          <div class="cb-step">
+            <div class="cb-step-num">1</div>
+            <div class="cb-step-icon">🏪</div>
+            <div class="cb-step-text"><strong>VISIT WEEKLY</strong><span>Visit once each calendar week.</span></div>
+          </div>
+          <div class="cb-step">
+            <div class="cb-step-num">2</div>
+            <div class="cb-step-balls">
+              <i style="background:#2ea043">B</i><i style="background:#c8102e">I</i><i style="background:#2b6cb0">N</i><i style="background:#d4a017">G</i><i style="background:#7c3aed">O</i>
+            </div>
+            <div class="cb-step-text"><strong>DRAW 5 BALLS</strong><span>Complete one official five-ball draw.</span></div>
+          </div>
+          <div class="cb-step">
+            <div class="cb-step-num">3</div>
+            <div class="cb-step-icon">🗂️</div>
+            <div class="cb-step-text"><strong>BUILD YOUR CARD</strong><span>Matching numbers remain marked.</span></div>
+          </div>
+        </div>
+
+        <div class="cb-section-title">WAYS TO WIN</div>
+        <div class="cb-wins">
+          <div class="cb-win-box">
+            <div class="cb-mini-grid corners">${"<i></i>".repeat(16)}</div>
+            <div class="cb-win-label">FOUR CORNERS</div>
+            <div class="cb-win-amount">🏆 $${PRIZES.CORNERS}</div>
+          </div>
+          <div class="cb-win-box">
+            <div class="cb-mini-grid line">${"<i></i>".repeat(5)}</div>
+            <div class="cb-win-label">SINGLE LINE</div>
+            <div class="cb-win-amount">🏆 $${PRIZES.LINE}</div>
+          </div>
+          <div class="cb-win-box">
+            <div class="cb-mini-grid full">${"<i></i>".repeat(16)}</div>
+            <div class="cb-win-label">FULL BINGO</div>
+            <div class="cb-win-amount">🏆 $${PRIZES.BLACKOUT}</div>
+          </div>
+        </div>
+
+        <div class="cb-rules-row">
+          <div class="cb-section-title small">QUICK RULES</div>
+          <ul class="cb-rules">
+            <li>✅ Participation is FREE</li>
+            <li>✅ Stay current to participate</li>
+            <li>✅ One play each week</li>
+            <li>✅ Card remains in store</li>
+            <li>✅ Manager verifies prizes</li>
+          </ul>
+        </div>
+
+        <div class="cb-footer">
+          <div class="cb-thankyou">Thank You<span>FOR PLAYING! SEE YOU NEXT WEEK.</span></div>
+          <div class="cb-contact">📍 ${STORE_ADDRESS}<br>📞 ${STORE_PHONE}</div>
+          <div class="cb-legal">Participation subject to official program rules.</div>
+        </div>
       </div>`;
   }
 

@@ -20,10 +20,16 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   physical card. Previous numbers are pre-filled as a starting point if you're re-entering
   the same customer.
 - **Print the card** — once a card is complete, **Print Card (Front/Back)** opens the print
-  dialog for a 4x6 index card (landscape): the front has the customer's name, date, and their
-  B-I-N-G-O grid; the back has the prize rules and a short thank-you note. Print the front,
-  flip the card over, then print the back (most printers don't duplex index card stock
-  automatically). Also available anytime later from the Roster tab for reprints.
+  dialog for a 4x6 index card (landscape), using the official RACBINGO card design: front has
+  the branded header, customer name/issue date/card ID, and the B-I-N-G-O grid with a
+  checkbox next to each number; back has the "How to Play" steps, prize tiers, quick rules,
+  and store contact info. Print the front, flip the card over, then print the back (most
+  printers don't duplex index card stock automatically). Also available anytime later from
+  the Roster tab for reprints.
+- **Validate a card** — click **View Card** on any roster entry to see their stored numbers
+  in the actual grid layout (for matching against the physical card) plus a "Progression"
+  log of every round they've played, what was drawn, and what they won — useful for
+  double-checking data entry and for record-keeping.
 - **Weekly alert** — since each customer is meant to play once a week, selecting someone who
   already played in the last 7 days shows a clear warning banner. It doesn't block you from
   starting a round anyway — it's a heads-up, not a hard stop.
@@ -55,7 +61,8 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   on the fly, right from the Play Round tab.
 - **Roster** — every customer with their card-entry status, last-played date (with a "this
   week" flag), any pending unredeemed rewards, and a one-click jump into a new round for
-  them. Rename or remove anyone.
+  them. Expand **View Card** to validate their numbers and see their play history. Rename or
+  remove anyone.
 - **History** — every completed round logged with who played, the balls drawn, and any
   prizes — plus a running total of RACCASH awarded and how much is still unredeemed.
 - **Backup** — export all data as JSON (full backup) or a CSV of winners (including
@@ -101,3 +108,9 @@ copy outside the browser.
 - The printable card's 4x6 landscape page size is set via a named CSS page (`@page
   card-page`), which is well supported in Chrome/Edge. If you print from a browser that
   ignores it, just set the paper size to 4x6 (or "Index Card") manually in the print dialog.
+- The card's back lists the real, current prize tiers ($25/$75/$100) rather than a flat
+  amount, and its store address/phone are hardcoded in `app.js` (`STORE_ADDRESS`,
+  `STORE_PHONE`) — update those if the store location changes.
+- Card ID on the printed card is generated from the customer's internal ID plus the issue
+  date (e.g. `RB-F8QZ5V-072126`) — it's for matching a physical card back to its digital
+  record, not a security feature.
