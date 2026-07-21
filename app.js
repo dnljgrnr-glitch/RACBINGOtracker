@@ -1,11 +1,12 @@
 (() => {
   "use strict";
 
-  const STORAGE_KEY = "racbingo_data_v2";
+  const STORAGE_KEY = "racbingo_data_v3";
   const COLUMNS = ["B", "I", "N", "G", "O"];
   const COLUMN_RANGES = { B: [1, 15], I: [16, 30], N: [31, 45], G: [46, 60], O: [61, 75] };
   const FREE = "FREE";
   const BALLS_PER_ROUND = 5;
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   const PRIZES = { LINE: 25, CORNERS: 75, BLACKOUT: 100 };
 
@@ -18,11 +19,7 @@
   // ---------- Persistence ----------
 
   function defaultData() {
-    return {
-      customers: [],
-      currentRound: null, // { customerId, draws: [], wins: [], startedAt }
-      history: []
-    };
+    return { customers: [], currentRound: null, history: [] };
   }
 
   function loadData() {
@@ -44,6 +41,7 @@
   }
 
   let state = loadData();
+  let selectedCustomerId = null;
 
   // ---------- Helpers ----------
 
@@ -104,10 +102,23 @@
     return n;
   }
 
+  function playedThisWeek(customer) {
+    return !!customer.lastPlayedAt && (Date.now() - customer.lastPlayedAt) < WEEK_MS;
+  }
+
+  function pendingRewardsFor(customerId) {
+    const wins = [];
+    state.history.forEach(round => {
+      if (round.customerId !== customerId) return;
+      round.wins.forEach(w => { if (!w.redeemed) wins.push(w); });
+    });
+    return wins;
+  }
+
   // ---------- Customer CRUD ----------
 
   function addCustomer(name) {
-    const customer = { id: uid(), name: name.trim(), card: emptyCard() };
+    const customer = { id: uid(), name: name.trim(), card: emptyCard(), lastPlayedAt: null };
     state.customers.push(customer);
     saveData();
     return customer;
@@ -115,9 +126,8 @@
 
   function removeCustomer(id) {
     state.customers = state.customers.filter(c => c.id !== id);
-    if (state.currentRound && state.currentRound.customerId === id) {
-      state.currentRound = null;
-    }
+    if (state.currentRound && state.currentRound.customerId === id) state.currentRound = null;
+    if (selectedCustomerId === id) selectedCustomerId = null;
     saveData();
   }
 
@@ -136,6 +146,9 @@
   // ---------- Round actions ----------
 
   function startRound(customerId) {
+    const customer = findCustomer(customerId);
+    if (!customer) return;
+    customer.lastPlayedAt = Date.now();
     state.currentRound = { customerId, draws: [], wins: [], startedAt: Date.now() };
     saveData();
   }
@@ -193,7 +206,7 @@
       const already = state.currentRound.wins.some(w => w.pattern === pattern);
       if (!already) {
         const tier = tierFor(pattern);
-        const win = { pattern, prize: tier.prize, label: tier.label, timestamp: Date.now() };
+        const win = { pattern, prize: tier.prize, label: tier.label, timestamp: Date.now(), redeemed: false, redeemedAt: null };
         state.currentRound.wins.push(win);
         pendingWinPopups.push({ customerName: customer.name, ...win });
       }
@@ -204,53 +217,143 @@
     if (!state.currentRound) return;
     const customer = findCustomer(state.currentRound.customerId);
     state.history.unshift({
+      id: uid(),
       customerId: state.currentRound.customerId,
       customerName: customer ? customer.name : "(removed customer)",
       startedAt: state.currentRound.startedAt,
       endedAt: Date.now(),
       draws: state.currentRound.draws.slice(),
+      card: customer ? JSON.parse(JSON.stringify(customer.card)) : null,
       wins: state.currentRound.wins.slice()
     });
     state.currentRound = null;
+    selectedCustomerId = null;
     saveData();
+  }
+
+  function confirmRedemption(roundId, winIndex) {
+    const round = state.history.find(r => r.id === roundId);
+    if (!round) return;
+    const win = round.wins[winIndex];
+    if (!win) return;
+    win.redeemed = true;
+    win.redeemedAt = Date.now();
+    saveData();
+    selectedCustomerId = round.customerId;
+    switchTab("game");
+    render();
+  }
+
+  // ---------- Tabs ----------
+
+  function switchTab(name) {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === `tab-${name}`));
   }
 
   // ---------- Rendering ----------
 
   function render() {
-    renderRoundPicker();
-    renderActiveRound();
+    renderPlayRoundTab();
     renderRoster();
     renderHistory();
     processWinPopupQueue();
   }
 
-  function renderRoundPicker() {
-    const picker = document.getElementById("roundPicker");
+  function renderPlayRoundTab() {
+    const picker = document.getElementById("customerPicker");
+    const panel = document.getElementById("customerPanel");
     const active = document.getElementById("activeRound");
+
     if (state.currentRound) {
       picker.hidden = true;
+      panel.hidden = true;
       active.hidden = false;
+      renderActiveRound();
       return;
     }
-    picker.hidden = false;
     active.hidden = true;
 
-    const select = document.getElementById("roundCustomerSelect");
-    const eligible = state.customers.filter(cardComplete);
-    select.innerHTML = "";
-    eligible.forEach(c => {
-      const opt = document.createElement("option");
-      opt.value = c.id;
-      opt.textContent = c.name;
-      select.appendChild(opt);
-    });
+    if (selectedCustomerId && findCustomer(selectedCustomerId)) {
+      picker.hidden = true;
+      panel.hidden = false;
+      renderCustomerPanel();
+      return;
+    }
+    selectedCustomerId = null;
+    picker.hidden = false;
+    panel.hidden = true;
+  }
 
-    const noneMsg = document.getElementById("noCustomersForRound");
-    const hasEligible = eligible.length > 0;
-    noneMsg.hidden = hasEligible;
-    select.hidden = !hasEligible;
-    document.getElementById("startRoundBtn").hidden = !hasEligible;
+  function formatDate(ts) {
+    return new Date(ts).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }
+
+  function renderCustomerPanel() {
+    const customer = findCustomer(selectedCustomerId);
+    document.getElementById("selectedCustomerName").textContent = customer.name;
+
+    const alertEl = document.getElementById("weeklyAlert");
+    if (playedThisWeek(customer)) {
+      alertEl.textContent = `⚠️ ${customer.name} already played this week — last played ${formatDate(customer.lastPlayedAt)}.`;
+      alertEl.hidden = false;
+    } else {
+      alertEl.hidden = true;
+    }
+
+    renderCardEntryGrid(customer);
+    const filled = cardFilledCount(customer);
+    const statusEl = document.getElementById("cardEntryStatus");
+    const complete = filled === 24;
+    statusEl.textContent = complete ? "Card ready ✓" : `${filled}/24 numbers entered`;
+    statusEl.classList.toggle("complete", complete);
+    document.getElementById("startRoundBtn").disabled = !complete;
+  }
+
+  function renderCardEntryGrid(customer) {
+    const grid = document.getElementById("cardEntryGrid");
+    grid.innerHTML = "";
+    COLUMNS.forEach(col => {
+      const h = document.createElement("div");
+      h.className = "cell-header";
+      h.textContent = col;
+      grid.appendChild(h);
+    });
+    for (let row = 0; row < 5; row++) {
+      COLUMNS.forEach(col => {
+        const value = customer.card[col][row];
+        if (value === FREE) {
+          const cell = document.createElement("div");
+          cell.className = "cell-free";
+          cell.textContent = "FREE";
+          grid.appendChild(cell);
+          return;
+        }
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = COLUMN_RANGES[col][0];
+        input.max = COLUMN_RANGES[col][1];
+        input.value = value === null ? "" : value;
+        input.placeholder = `${COLUMN_RANGES[col][0]}-${COLUMN_RANGES[col][1]}`;
+        input.addEventListener("change", () => {
+          const [min, max] = COLUMN_RANGES[col];
+          const n = parseInt(input.value, 10);
+          if (input.value === "") {
+            setCardCell(customer.id, col, row, null);
+            renderCustomerPanel();
+            return;
+          }
+          if (!Number.isInteger(n) || n < min || n > max) {
+            alert(`${col} column must be ${min}-${max}.`);
+            input.value = value === null ? "" : value;
+            return;
+          }
+          setCardCell(customer.id, col, row, n);
+          renderCustomerPanel();
+        });
+        grid.appendChild(input);
+      });
+    }
   }
 
   function renderActiveRound() {
@@ -262,7 +365,6 @@
     document.getElementById("drawProgress").textContent =
       `${state.currentRound.draws.length} of ${BALLS_PER_ROUND} balls drawn`;
 
-    const drawn = drawnSet();
     const chipsWrap = document.getElementById("drawnBalls");
     chipsWrap.innerHTML = "";
     for (let i = 0; i < BALLS_PER_ROUND; i++) {
@@ -283,65 +385,81 @@
     drawInput.disabled = roundFull;
     document.querySelector("#drawForm button[type=submit]").disabled = roundFull;
 
-    const grid = document.getElementById("activeRoundGrid");
-    buildMiniGrid(grid, customer, { editable: false, drawn });
+    const winsWrap = document.getElementById("roundWinsWrap");
+    const winsList = document.getElementById("roundWinsList");
+    winsList.innerHTML = "";
+    winsWrap.hidden = state.currentRound.wins.length === 0;
+    state.currentRound.wins.forEach(w => {
+      const row = document.createElement("div");
+      row.className = "round-win-row";
+      row.textContent = `🏆 ${w.label} — $${w.prize} RACCASH`;
+      winsList.appendChild(row);
+    });
   }
 
-  function buildMiniGrid(container, customer, { editable, drawn }) {
-    container.innerHTML = "";
-    const matrix = editable ? null : hitMatrix(customer, drawn || new Set());
+  // ---------- Customer search ----------
 
-    COLUMNS.forEach(col => {
-      const h = document.createElement("div");
-      h.className = "cell-header";
-      h.textContent = col;
-      container.appendChild(h);
+  function matchingCustomers(query) {
+    const q = query.trim().toLowerCase();
+    let list = state.customers.slice();
+    if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+    list.sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+      const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return a.name.localeCompare(b.name);
+    });
+    return list.slice(0, 8);
+  }
+
+  function renderSearchResults() {
+    const input = document.getElementById("customerSearchInput");
+    const results = document.getElementById("customerSearchResults");
+    const query = input.value;
+    const matches = matchingCustomers(query);
+    results.innerHTML = "";
+
+    matches.forEach(c => {
+      const row = document.createElement("div");
+      row.className = "search-result-row";
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = c.name;
+      row.appendChild(nameSpan);
+      if (playedThisWeek(c)) {
+        const badge = document.createElement("span");
+        badge.className = "search-badge";
+        badge.textContent = "Played this week";
+        row.appendChild(badge);
+      }
+      row.addEventListener("click", () => {
+        selectedCustomerId = c.id;
+        input.value = "";
+        results.hidden = true;
+        render();
+      });
+      results.appendChild(row);
     });
 
-    for (let row = 0; row < 5; row++) {
-      COLUMNS.forEach((col, colIdx) => {
-        const value = customer.card[col][row];
-        if (editable) {
-          if (value === FREE) {
-            const cell = document.createElement("div");
-            cell.className = "cell free";
-            cell.textContent = "FREE";
-            container.appendChild(cell);
-            return;
-          }
-          const input = document.createElement("input");
-          input.type = "number";
-          input.min = COLUMN_RANGES[col][0];
-          input.max = COLUMN_RANGES[col][1];
-          input.value = value === null ? "" : value;
-          input.placeholder = `${COLUMN_RANGES[col][0]}-${COLUMN_RANGES[col][1]}`;
-          input.addEventListener("change", () => {
-            const [min, max] = COLUMN_RANGES[col];
-            const n = parseInt(input.value, 10);
-            if (input.value === "") {
-              setCardCell(customer.id, col, row, null);
-              render();
-              return;
-            }
-            if (!Number.isInteger(n) || n < min || n > max) {
-              alert(`${col} column must be ${min}-${max}.`);
-              input.value = value === null ? "" : value;
-              return;
-            }
-            setCardCell(customer.id, col, row, n);
-            render();
-          });
-          container.appendChild(input);
-        } else {
-          const cell = document.createElement("div");
-          const isHit = matrix[row][colIdx];
-          cell.className = "cell" + (value === FREE ? " free" : isHit ? " hit" : "");
-          cell.textContent = value === FREE ? "FREE" : (value === null ? "–" : value);
-          container.appendChild(cell);
-        }
+    const trimmed = query.trim();
+    const exactMatch = trimmed && state.customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase());
+    if (trimmed && !exactMatch) {
+      const addRow = document.createElement("div");
+      addRow.className = "search-result-row add-new";
+      addRow.textContent = `+ Add "${trimmed}" as new customer`;
+      addRow.addEventListener("click", () => {
+        const customer = addCustomer(trimmed);
+        selectedCustomerId = customer.id;
+        input.value = "";
+        results.hidden = true;
+        render();
       });
+      results.appendChild(addRow);
     }
+
+    results.hidden = matches.length === 0 && (!trimmed || exactMatch);
   }
+
+  // ---------- Roster ----------
 
   function renderRoster() {
     const list = document.getElementById("rosterList");
@@ -359,8 +477,7 @@
         render();
       });
 
-      const removeBtn = node.querySelector(".btn-remove");
-      removeBtn.addEventListener("click", () => {
+      node.querySelector(".btn-remove").addEventListener("click", () => {
         if (confirm(`Remove ${customer.name} from the roster? This cannot be undone.`)) {
           removeCustomer(customer.id);
           render();
@@ -369,19 +486,36 @@
 
       const status = node.querySelector(".card-status");
       const filled = cardFilledCount(customer);
-      if (filled === 24) {
-        status.textContent = "Card complete ✓";
-        status.classList.add("complete");
+      status.textContent = filled === 24 ? "Card ready ✓" : `${filled}/24 numbers entered`;
+      status.classList.toggle("complete", filled === 24);
+
+      const lastPlayed = node.querySelector(".last-played");
+      if (customer.lastPlayedAt) {
+        const recent = playedThisWeek(customer);
+        lastPlayed.textContent = `Last played: ${formatDate(customer.lastPlayedAt)}${recent ? " (this week)" : ""}`;
+        lastPlayed.classList.toggle("recent", recent);
       } else {
-        status.textContent = `${filled}/24 numbers filled`;
+        lastPlayed.textContent = "Never played";
       }
 
-      const miniGrid = node.querySelector(".mini-grid");
-      buildMiniGrid(miniGrid, customer, { editable: true });
+      const pending = pendingRewardsFor(customer.id);
+      const badge = node.querySelector(".reward-badge");
+      if (pending.length) {
+        badge.hidden = false;
+        badge.textContent = `🎁 ${pending.length} pending reward${pending.length === 1 ? "" : "s"}`;
+      }
+
+      node.querySelector(".play-btn").addEventListener("click", () => {
+        selectedCustomerId = customer.id;
+        switchTab("game");
+        render();
+      });
 
       list.appendChild(node);
     });
   }
+
+  // ---------- History ----------
 
   function renderHistory() {
     const list = document.getElementById("historyList");
@@ -390,35 +524,73 @@
     list.innerHTML = "";
     empty.hidden = state.history.length !== 0;
 
-    let totalPaid = 0;
-    state.history.forEach(round => round.wins.forEach(w => { totalPaid += w.prize; }));
+    let totalAwarded = 0;
+    let totalPending = 0;
+    state.history.forEach(round => round.wins.forEach(w => {
+      totalAwarded += w.prize;
+      if (!w.redeemed) totalPending += w.prize;
+    }));
     summary.textContent = state.history.length
-      ? `Total RACCASH awarded: $${totalPaid} across ${state.history.length} round${state.history.length === 1 ? "" : "s"}`
+      ? `Total RACCASH awarded: $${totalAwarded} across ${state.history.length} round${state.history.length === 1 ? "" : "s"}` +
+        (totalPending ? ` · $${totalPending} still unredeemed` : "")
       : "";
 
     state.history.forEach(round => {
       const item = document.createElement("div");
       item.className = "history-item";
-      const date = new Date(round.startedAt);
+
       const h4 = document.createElement("h4");
-      h4.textContent = `${round.customerName} — ${date.toLocaleString()}`;
+      h4.textContent = `${round.customerName} — ${new Date(round.startedAt).toLocaleString()}`;
       item.appendChild(h4);
 
       const meta = document.createElement("div");
+      meta.className = "meta-line";
       meta.textContent = `Balls drawn: ${round.draws.join(", ") || "none"}`;
       item.appendChild(meta);
 
-      const winnersDiv = document.createElement("div");
-      if (round.wins.length) {
-        winnersDiv.className = "winners";
-        winnersDiv.textContent = round.wins
-          .map(w => `${w.label} — $${w.prize}`)
-          .join(" · ");
+      if (round.wins.length === 0) {
+        const none = document.createElement("div");
+        none.className = "no-winners";
+        none.textContent = "No win this round.";
+        item.appendChild(none);
       } else {
-        winnersDiv.className = "no-winners";
-        winnersDiv.textContent = "No win this round.";
+        round.wins.forEach((win, idx) => {
+          const row = document.createElement("div");
+          row.className = "win-row";
+
+          const label = document.createElement("span");
+          label.className = "win-row-label";
+          label.textContent = `🏆 ${win.label} — $${win.prize}`;
+          row.appendChild(label);
+
+          const actions = document.createElement("span");
+          actions.className = "win-row-actions";
+
+          const printBtn = document.createElement("button");
+          printBtn.type = "button";
+          printBtn.className = "btn btn-ghost btn-sm";
+          printBtn.textContent = "Print Certificate 🖨";
+          printBtn.addEventListener("click", () => printCertificate(round.customerName, win));
+          actions.appendChild(printBtn);
+
+          if (win.redeemed) {
+            const tag = document.createElement("span");
+            tag.className = "redeemed-tag";
+            tag.textContent = `Redeemed ${formatDate(win.redeemedAt)}`;
+            actions.appendChild(tag);
+          } else {
+            const redeemBtn = document.createElement("button");
+            redeemBtn.type = "button";
+            redeemBtn.className = "btn btn-primary btn-sm";
+            redeemBtn.textContent = "Confirm Redemption & New Card";
+            redeemBtn.addEventListener("click", () => confirmRedemption(round.id, idx));
+            actions.appendChild(redeemBtn);
+          }
+
+          row.appendChild(actions);
+          item.appendChild(row);
+        });
       }
-      item.appendChild(winnersDiv);
 
       list.appendChild(item);
     });
@@ -427,6 +599,7 @@
   // ---------- Win celebration ----------
 
   let popupActive = false;
+  let activeModalWin = null;
 
   function processWinPopupQueue() {
     if (popupActive || pendingWinPopups.length === 0) return;
@@ -436,6 +609,7 @@
 
   function showWinModal(win) {
     popupActive = true;
+    activeModalWin = win;
     const overlay = document.getElementById("winModalOverlay");
     document.getElementById("winModalTitle").textContent = "BINGO!";
     document.getElementById("winModalSubtitle").textContent = `${win.customerName} hit ${win.label}!`;
@@ -448,6 +622,7 @@
     document.getElementById("winModalOverlay").hidden = true;
     stopFireworks();
     popupActive = false;
+    activeModalWin = null;
     processWinPopupQueue();
   }
 
@@ -525,6 +700,67 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
+  // ---------- Printable certificate ----------
+
+  function voucherHTML(amount) {
+    return `
+      <div class="voucher">
+        <div class="voucher-corner voucher-corner-tl">$${amount}</div>
+        <div class="voucher-corner voucher-corner-tr">$${amount}</div>
+        <div class="voucher-brand">RAC</div>
+        <div class="voucher-title">RAC CASH</div>
+        <div class="voucher-amount">$${amount}</div>
+        <div class="voucher-icons">
+          <div class="voucher-icon-block">
+            <div class="voucher-icon">🛒</div>
+            <div class="voucher-icon-label">GOOD TO<br>BRING IN-STORE ONLY</div>
+          </div>
+          <div class="voucher-icon-block">
+            <div class="voucher-icon">🤝</div>
+            <div class="voucher-icon-label">REDEEM ON ANY<br>NEW AGREEMENT</div>
+          </div>
+        </div>
+        <div class="voucher-footer">
+          <span>$${amount}</span>
+          <span>PROMOTIONAL STORE VOUCHER &bull; NOT LEGAL TENDER &bull; IN-STORE USE ONLY</span>
+          <span>$${amount}</span>
+        </div>
+        <div class="voucher-corner voucher-corner-bl">$${amount}</div>
+        <div class="voucher-corner voucher-corner-br">$${amount}</div>
+      </div>`;
+  }
+
+  function thankYouMessage(customerName) {
+    return `Dear ${escapeHtml(customerName)},<br><br>
+      From all of us on the team here at Rent-A-Center — thank you! Nights like our RACBINGO
+      drawings are only as good as the customers who show up and play, and we're grateful
+      you're one of them. Your continued loyalty and support are what make our store feel like
+      a community, not just a business.<br><br>
+      We hope you enjoy your reward, and we can't wait to see you at the next drawing.<br><br>
+      With appreciation,<br>
+      Your Rent-A-Center Team`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function printCertificate(customerName, win) {
+    document.getElementById("certName").textContent = customerName;
+    document.getElementById("certSubline").textContent =
+      `${win.label} win — ${new Date(win.timestamp).toLocaleDateString()}`;
+    document.getElementById("certVoucher").innerHTML = voucherHTML(win.prize);
+    document.getElementById("certThankYou").innerHTML = thankYouMessage(customerName);
+    document.body.classList.add("printing-cert");
+    window.print();
+  }
+
+  window.addEventListener("afterprint", () => {
+    document.body.classList.remove("printing-cert");
+  });
+
   // ---------- Export / Import ----------
 
   function exportJson() {
@@ -533,15 +769,19 @@
   }
 
   function exportCsv() {
-    const rows = [["Round Started", "Customer", "Balls Drawn", "Pattern", "Prize"]];
+    const rows = [["Round Started", "Customer", "Balls Drawn", "Pattern", "Prize", "Redeemed", "Redeemed Date"]];
     state.history.forEach(round => {
       const started = new Date(round.startedAt).toLocaleString();
       const balls = round.draws.join(" ");
       if (round.wins.length === 0) {
-        rows.push([started, round.customerName, balls, "", ""]);
+        rows.push([started, round.customerName, balls, "", "", "", ""]);
       } else {
         round.wins.forEach(w => {
-          rows.push([started, round.customerName, balls, w.label, w.prize]);
+          rows.push([
+            started, round.customerName, balls, w.label, w.prize,
+            w.redeemed ? "Yes" : "No",
+            w.redeemed ? new Date(w.redeemedAt).toLocaleString() : ""
+          ]);
         });
       }
     });
@@ -577,6 +817,7 @@
         if (!confirm("Importing will replace all current data. Continue?")) return;
         state = parsed;
         if (state.currentRound === undefined) state.currentRound = null;
+        selectedCustomerId = null;
         saveData();
         render();
       } catch (e) {
@@ -591,18 +832,27 @@
   document.getElementById("tabs").addEventListener("click", e => {
     const btn = e.target.closest(".tab-btn");
     if (!btn) return;
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+    switchTab(btn.dataset.tab);
+  });
+
+  const searchInput = document.getElementById("customerSearchInput");
+  searchInput.addEventListener("input", renderSearchResults);
+  searchInput.addEventListener("focus", renderSearchResults);
+  document.addEventListener("click", e => {
+    const results = document.getElementById("customerSearchResults");
+    if (!results.contains(e.target) && e.target !== searchInput) results.hidden = true;
+  });
+
+  document.getElementById("changeCustomerBtn").addEventListener("click", () => {
+    selectedCustomerId = null;
+    render();
   });
 
   document.getElementById("startRoundBtn").addEventListener("click", () => {
-    const select = document.getElementById("roundCustomerSelect");
-    const hint = document.getElementById("roundPickerHint");
-    hint.hidden = true;
-    if (!select.value) return;
-    startRound(select.value);
+    if (!selectedCustomerId) return;
+    const customer = findCustomer(selectedCustomerId);
+    if (!customer || !cardComplete(customer)) return;
+    startRound(selectedCustomerId);
     render();
   });
 
@@ -610,9 +860,7 @@
     e.preventDefault();
     const input = document.getElementById("drawInput");
     const num = parseInt(input.value, 10);
-    if (drawBall(num)) {
-      input.value = "";
-    }
+    if (drawBall(num)) input.value = "";
     render();
     input.focus();
   });
@@ -629,16 +877,6 @@
     }
   });
 
-  document.getElementById("addCustomerForm").addEventListener("submit", e => {
-    e.preventDefault();
-    const input = document.getElementById("newCustomerName");
-    if (!input.value.trim()) return;
-    addCustomer(input.value);
-    input.value = "";
-    render();
-    input.focus();
-  });
-
   document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
   document.getElementById("exportCsvBtn").addEventListener("click", exportCsv);
   document.getElementById("importInput").addEventListener("change", e => {
@@ -648,6 +886,9 @@
   });
 
   document.getElementById("winModalAckBtn").addEventListener("click", dismissWinModal);
+  document.getElementById("winModalPrintBtn").addEventListener("click", () => {
+    if (activeModalWin) printCertificate(activeModalWin.customerName, activeModalWin);
+  });
 
   render();
 })();

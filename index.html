@@ -27,20 +27,30 @@
   <!-- PLAY ROUND TAB -->
   <section id="tab-game" class="tab-panel active">
 
-    <div id="roundPicker" class="round-picker">
-      <h2 class="section-heading">Start a Round</h2>
-      <p class="hint-text">The ball pool always resets to a full 75 between customers. Pick who's up.</p>
-      <div class="call-row">
-        <select id="roundCustomerSelect"></select>
-        <button type="button" id="startRoundBtn" class="btn btn-primary btn-big">Start Round</button>
+    <div id="customerPicker" class="panel-box">
+      <h2 class="section-heading">Find or Add Customer</h2>
+      <div class="search-wrap">
+        <input type="text" id="customerSearchInput" placeholder="Type a name to search or add..." autocomplete="off">
+        <div id="customerSearchResults" class="search-results" hidden></div>
       </div>
-      <p id="roundPickerHint" class="field-error" hidden></p>
-      <p id="noCustomersForRound" class="empty-state" hidden>
-        No customers with a completed card yet. Add one (and fill in their full card) in the Roster tab first.
-      </p>
     </div>
 
-    <div id="activeRound" class="active-round" hidden>
+    <div id="customerPanel" class="panel-box" hidden>
+      <div class="customer-panel-header">
+        <h2 id="selectedCustomerName"></h2>
+        <button type="button" id="changeCustomerBtn" class="btn btn-ghost">Change Customer</button>
+      </div>
+      <p id="weeklyAlert" class="weekly-alert" hidden></p>
+
+      <h3 class="section-heading">This Week's Card Numbers</h3>
+      <p class="hint-text">Enter all 24 numbers from their physical card (5 per column; the center is always free).</p>
+      <div class="card-entry-grid" id="cardEntryGrid"></div>
+      <p id="cardEntryStatus" class="card-entry-status"></p>
+
+      <button type="button" id="startRoundBtn" class="btn btn-primary btn-big" disabled>Start Round</button>
+    </div>
+
+    <div id="activeRound" class="panel-box active-round" hidden>
       <div class="game-top">
         <div>
           <h2 id="activeCustomerName" class="active-customer-name"></h2>
@@ -61,22 +71,16 @@
 
       <div class="drawn-balls" id="drawnBalls"></div>
 
-      <h2 class="section-heading">Card</h2>
-      <div class="mini-grid active-round-grid" id="activeRoundGrid"></div>
+      <div id="roundWinsWrap" class="round-wins-wrap" hidden>
+        <h3 class="section-heading">Wins This Round</h3>
+        <div id="roundWinsList" class="round-wins-list"></div>
+      </div>
     </div>
 
   </section>
 
   <!-- ROSTER TAB -->
   <section id="tab-roster" class="tab-panel">
-    <form id="addCustomerForm" class="add-customer-form" autocomplete="off">
-      <label for="newCustomerName">Customer name</label>
-      <div class="call-row">
-        <input type="text" id="newCustomerName" placeholder="Full name" required>
-        <button type="submit" class="btn btn-primary">Add Customer</button>
-      </div>
-    </form>
-
     <div class="data-actions">
       <button id="exportJsonBtn" class="btn btn-ghost">Export Backup (JSON)</button>
       <button id="exportCsvBtn" class="btn btn-ghost">Export Winners (CSV)</button>
@@ -87,7 +91,7 @@
     </div>
 
     <div class="roster-list" id="rosterList"></div>
-    <p id="noCustomersRoster" class="empty-state" hidden>No customers yet. Add one above.</p>
+    <p id="noCustomersRoster" class="empty-state" hidden>No customers yet. Add one from the Play Round tab.</p>
   </section>
 
   <!-- HISTORY TAB -->
@@ -106,7 +110,9 @@
       <button type="button" class="btn btn-remove" title="Remove customer">&times;</button>
     </header>
     <div class="card-status"></div>
-    <div class="mini-grid"></div>
+    <div class="last-played"></div>
+    <div class="reward-badge" hidden></div>
+    <button type="button" class="btn btn-ghost btn-sm play-btn">Play Round</button>
   </article>
 </template>
 
@@ -117,7 +123,27 @@
     <h2 id="winModalTitle">BINGO!</h2>
     <p id="winModalSubtitle"></p>
     <div class="win-modal-amount" id="winModalAmount"></div>
-    <button type="button" id="winModalAckBtn" class="btn btn-primary btn-big">Notify Customer ✓</button>
+    <div class="win-modal-actions">
+      <button type="button" id="winModalPrintBtn" class="btn btn-ghost">Print Certificate 🖨</button>
+      <button type="button" id="winModalAckBtn" class="btn btn-primary btn-big">Notify Customer ✓</button>
+    </div>
+  </div>
+</div>
+
+<div id="certificateArea" class="certificate-area">
+  <div class="certificate-page">
+    <div class="cert-header">
+      <div class="cert-emoji">🎉 🎊 🎉</div>
+      <h1>Congratulations, <span id="certName"></span>!</h1>
+      <p id="certSubline"></p>
+    </div>
+    <div class="cert-voucher" id="certVoucher"></div>
+    <p class="cert-instructions">Present this certificate in-store to redeem your RAC Cash toward any new agreement.</p>
+    <div class="cert-thankyou" id="certThankYou"></div>
+    <div class="cert-verify">
+      <div class="cert-verify-line">Redeemed by: ______________________</div>
+      <div class="cert-verify-line">Date: ______________________</div>
+    </div>
   </div>
 </div>
 
