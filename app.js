@@ -5,7 +5,6 @@
   const COLUMNS = ["B", "I", "N", "G", "O"];
   const COLUMN_RANGES = { B: [1, 15], I: [16, 30], N: [31, 45], G: [46, 60], O: [61, 75] };
   const FREE = "FREE";
-  const BALLS_PER_ROUND = 5;
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   const PRIZES = { LINE: 25, CORNERS: 75, BLACKOUT: 100 };
@@ -214,11 +213,6 @@
     errEl.classList.remove("is-info");
 
     if (!state.currentRound) return false;
-    if (state.currentRound.draws.length >= BALLS_PER_ROUND) {
-      errEl.textContent = `All ${BALLS_PER_ROUND} balls drawn for this round. Click "End Round" to continue.`;
-      errEl.hidden = false;
-      return false;
-    }
     if (!Number.isInteger(num) || num < 1 || num > 75) {
       errEl.textContent = "Enter a number between 1 and 75.";
       errEl.hidden = false;
@@ -344,10 +338,6 @@
     const errEl = document.getElementById(`roundDrawError-${roundId}`);
     if (!round) return;
     if (errEl) errEl.hidden = true;
-    if (round.draws.length >= BALLS_PER_ROUND) {
-      if (errEl) { errEl.textContent = `A round can only have ${BALLS_PER_ROUND} balls.`; errEl.hidden = false; }
-      return;
-    }
     if (!Number.isInteger(num) || num < 1 || num > 75) {
       if (errEl) { errEl.textContent = "Enter a number between 1 and 75."; errEl.hidden = false; }
       return;
@@ -497,14 +487,19 @@
     if (!customer) { state.currentRound = null; saveData(); render(); return; }
 
     document.getElementById("activeCustomerName").textContent = customer.name;
+    const count = state.currentRound.draws.length;
     document.getElementById("drawProgress").textContent =
-      `${state.currentRound.draws.length} of ${BALLS_PER_ROUND} balls drawn`;
+      count === 1 ? "1 ball drawn" : `${count} balls drawn`;
 
     const chipsWrap = document.getElementById("drawnBalls");
     chipsWrap.innerHTML = "";
-    for (let i = 0; i < BALLS_PER_ROUND; i++) {
-      const num = state.currentRound.draws[i];
-      if (num !== undefined) {
+    if (count === 0) {
+      const placeholder = document.createElement("div");
+      placeholder.className = "ball-chip empty-slot";
+      placeholder.textContent = "–";
+      chipsWrap.appendChild(placeholder);
+    } else {
+      state.currentRound.draws.forEach((num, i) => {
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "ball-chip removable";
@@ -515,17 +510,13 @@
           render();
         });
         chipsWrap.appendChild(chip);
-      } else {
-        const chip = document.createElement("div");
-        chip.className = "ball-chip empty-slot";
-        chip.textContent = "–";
-        chipsWrap.appendChild(chip);
-      }
+      });
     }
 
-    const drawInput = document.getElementById("drawInput");
-    const roundFull = state.currentRound.draws.length >= BALLS_PER_ROUND;
-    drawInput.disabled = roundFull;
+    // 75 is the natural ceiling (every number already called) — the
+    // duplicate-draw check makes this practically self-limiting anyway.
+    const roundFull = count >= 75;
+    document.getElementById("drawInput").disabled = roundFull;
     document.querySelector("#drawForm button[type=submit]").disabled = roundFull;
 
     const winsWrap = document.getElementById("roundWinsWrap");
@@ -711,7 +702,7 @@
     if (state.currentRound && state.currentRound.customerId === customer.id) {
       const live = document.createElement("div");
       live.className = "progression-row live";
-      live.textContent = `In progress — ${state.currentRound.draws.length}/${BALLS_PER_ROUND} balls drawn: ${state.currentRound.draws.join(", ") || "none yet"}`;
+      live.textContent = `In progress — ${state.currentRound.draws.length} ball${state.currentRound.draws.length === 1 ? "" : "s"} drawn: ${state.currentRound.draws.join(", ") || "none yet"}`;
       progression.appendChild(live);
     }
     if (rounds.length === 0 && !state.currentRound) {
@@ -1072,7 +1063,6 @@
 
   // ---------- Printable bingo card (front/back, 4x6 index card) ----------
 
-  const STORE_NAME = "RENT-A-CENTER";
   const STORE_ADDRESS = "437 Hepburn St., Williamsport, PA 17701";
   const STORE_PHONE = "(570) 322-4900";
 
@@ -1157,7 +1147,7 @@
             <div class="cb-step-balls">
               <i style="background:#2ea043">B</i><i style="background:#c8102e">I</i><i style="background:#2b6cb0">N</i><i style="background:#d4a017">G</i><i style="background:#7c3aed">O</i>
             </div>
-            <div class="cb-step-text"><strong>DRAW 5 BALLS</strong><span>Complete one official five-ball draw.</span></div>
+            <div class="cb-step-text"><strong>DRAW YOUR BALLS</strong><span>An associate pulls numbers for your card.</span></div>
           </div>
           <div class="cb-step">
             <div class="cb-step-num">3</div>
@@ -1343,14 +1333,14 @@
   });
 
   document.getElementById("endRoundBtn").addEventListener("click", () => {
-    if (confirm("End this round and move to the next customer?")) {
+    if (confirm("Submit this round and move to the next customer?")) {
       endRound();
       render();
     }
   });
 
   document.getElementById("cancelRoundBtn").addEventListener("click", () => {
-    if (confirm("Cancel this round without saving anything? Use this if the wrong customer was pulled up.")) {
+    if (confirm("Cancel this round without saving anything?")) {
       cancelRound();
       render();
     }

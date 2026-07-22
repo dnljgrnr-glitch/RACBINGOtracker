@@ -34,20 +34,24 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   already played in the last 7 days shows a clear warning banner. It doesn't block you from
   starting a round anyway — it's a heads-up, not a hard stop.
 - **Play the round** — the ball pool always resets to a full 75 before the next customer's
-  turn. A round is up to 5 balls; entering a number that repeats one already pulled this
-  round is rejected ("reroll — draw again") and doesn't count against the 5. A live,
-  read-only card grid on the Play Round screen highlights matches as you go. Click any
-  drawn ball to remove just that one, or click "Undo Last Draw" for the most recent.
-- **Cancel vs. End a round** — "End Round / Next Customer" saves the round to History.
-  "Cancel Round (Wrong Customer)" discards it entirely — for when the wrong customer was
-  pulled up by mistake — and restores their previous "last played" status untouched.
+  turn. There's no cap on balls per round — keep drawing for as long as the customer wants
+  to play, all the way to a full-card blackout if they get there. Entering a number that
+  repeats one already pulled is rejected ("reroll — draw another ball") without losing any
+  progress. A live, read-only card grid on the Play Round screen highlights matches as you
+  go, and the full draw history stays visible the whole time. Click any drawn ball to remove
+  just that one, or click "Undo Last Draw" for the most recent.
+- **Cancel vs. Submit a round** — "Submit Round / Next Customer" saves the round to History.
+  "Cancel Round" discards it entirely without saving anything — for a wrong customer pulled
+  up by mistake, or any other reason to scrap it — and restores their previous "last played"
+  status untouched.
 - **Prizes**, checked live after every ball:
   - **Line** (any row, column, or diagonal) = **$25 RACCASH**
   - **Four Corners** = **$75 RACCASH**
   - **Full BINGO** (blackout) = **$100 RACCASH**
 - **Win celebration** — the instant a customer hits a tier, fireworks play and a popup names
-  the win and payout, with buttons to print a certificate and/or acknowledge you've told the
-  customer.
+  the win and payout, with buttons to print a certificate and to **Continue Playing** — the
+  round keeps going with every ball and all progress intact, so a customer can keep drawing
+  from a Line win up through Four Corners or a full Blackout in one continuous round.
 - **Redeeming a reward** — redemption is tracked separately from winning, since a customer
   might not cash in right away. In the History tab, every unredeemed win has a "Confirm
   Redemption & New Card" button — it checks the reward off with today's date logged, and
@@ -67,8 +71,8 @@ No backend, no accounts, no build step. All data is stored locally in your brows
 - **Help tab** — a full, step-by-step reference for every feature in the app, written for
   quick lookup at the table. It ends with a **Tips & Scripts** section: ready-to-use lines
   for introducing the game, announcing a win, and pitching a promotion, plus an example
-  tiered bonus-draw structure (e.g. 2 weeks down = 2x draws, a month down = 3 draws + 1
-  bonus draw) and tips for running it in practice.
+  tiered bonus-draw structure (e.g. 2 weeks down = 2x the draws in their round, a month down
+  = 3x the draws + 1 bonus draw) and tips for running it in practice.
 
 ## Features
 

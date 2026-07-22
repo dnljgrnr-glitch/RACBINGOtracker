@@ -59,11 +59,11 @@
       <div class="game-top">
         <div>
           <h2 id="activeCustomerName" class="active-customer-name"></h2>
-          <div class="draw-progress" id="drawProgress">0 of 5 balls drawn</div>
+          <div class="draw-progress" id="drawProgress">0 balls drawn</div>
         </div>
         <div class="game-top-actions">
-          <button type="button" id="cancelRoundBtn" class="btn btn-ghost">Cancel Round (Wrong Customer)</button>
-          <button type="button" id="endRoundBtn" class="btn btn-danger-outline">End Round / Next Customer</button>
+          <button type="button" id="cancelRoundBtn" class="btn btn-ghost">Cancel Round</button>
+          <button type="button" id="endRoundBtn" class="btn btn-danger-outline">Submit Round / Next Customer</button>
         </div>
       </div>
 
@@ -75,7 +75,7 @@
           <button type="button" id="undoDrawBtn" class="btn btn-ghost">Undo Last Draw</button>
         </div>
         <p id="drawError" class="field-error" hidden></p>
-        <p class="hint-text">Click any drawn ball below to remove that specific one (for a misread or mistyped number).</p>
+        <p class="hint-text">Pull as many balls as you want. Click any drawn ball below to remove that specific one, then click <strong>Submit Round</strong> when done.</p>
       </form>
 
       <div class="drawn-balls" id="drawnBalls"></div>
@@ -133,22 +133,22 @@
       <h2 class="help-title">Starting and Playing a Round</h2>
       <ol>
         <li>Once the card shows <strong>"Card ready ✓"</strong>, click <strong>Start Round</strong>.</li>
-        <li>As each ball is called from the machine, type the number and click <strong>Draw</strong> (or press Enter).</li>
-        <li>If the same number gets pulled twice in one round, the app rejects it — just draw again. It doesn't count against the 5.</li>
+        <li>As each ball is called from the machine, type the number and click <strong>Draw</strong> (or press Enter). There's no limit — keep drawing for as long as the customer wants to play, all the way to a full-card blackout if they get there.</li>
+        <li>If the same number gets pulled twice, the app rejects it and tells the customer to pull another ball — it's never a dead end, they just keep drawing until it's a new number.</li>
         <li>Made a mistake? Click any drawn ball to remove just that one, or click <strong>Undo Last Draw</strong> for the most recent one.</li>
-        <li>Watch the <strong>Live Card Progress</strong> grid — matched numbers highlight green as you go.</li>
+        <li>Watch the <strong>Live Card Progress</strong> grid — matched numbers highlight green as you go, and the full draw history stays visible the entire time.</li>
       </ol>
 
       <h2 class="help-title">Wins and Celebrations</h2>
       <ol>
         <li>The app checks for a win after every ball — <strong>Line = $25</strong>, <strong>Four Corners = $75</strong>, <strong>Full BINGO = $100</strong>.</li>
-        <li>A win triggers fireworks and a popup. Click <strong>Print Certificate</strong> to hand the customer a redeemable certificate, then <strong>Notify Customer ✓</strong> to close it.</li>
+        <li>A win triggers fireworks and a popup. Click <strong>Print Certificate</strong> to hand the customer a redeemable certificate, then <strong>Continue Playing ▶</strong> — the round keeps going with all progress intact, so they can keep drawing toward the next prize tier (like going from a Line win up to Four Corners or a full Blackout).</li>
       </ol>
 
-      <h2 class="help-title">Ending or Canceling a Round</h2>
+      <h2 class="help-title">Submitting or Canceling a Round</h2>
       <ol>
-        <li>Click <strong>End Round / Next Customer</strong> when the customer is done playing — this saves their draws and any wins, and frees up the machine for the next person.</li>
-        <li>If you started a round for the <strong>wrong customer</strong> by mistake, click <strong>Cancel Round (Wrong Customer)</strong> instead — nothing gets saved, and their weekly play status is untouched.</li>
+        <li>Click <strong>Submit Round / Next Customer</strong> once the customer is completely done playing — this saves every ball drawn and any wins, and frees up the machine for the next person.</li>
+        <li>Started a round by mistake — wrong customer, or just need to scrap it? Click <strong>Cancel Round</strong> instead — nothing gets saved, and their weekly play status is untouched.</li>
       </ol>
 
       <h2 class="help-title">Redeeming a Reward</h2>
@@ -204,17 +204,17 @@
       <h2 class="help-title">Pro Tips: Promoting With RACBINGO</h2>
       <p class="hint-text">RACBINGO works best as a visible, talked-about reason to come back and to put more down. Example tiered structure:</p>
       <ol>
-        <li><strong>Standard weekly visit</strong> — 1 RACBINGO draw (one 5-ball round).</li>
-        <li><strong>Start or renew an agreement with 2 weeks paid down</strong> — 2x draws (two rounds back-to-back).</li>
-        <li><strong>Pay a full month down</strong> — 3 draws <strong>+ 1 BONUS draw</strong> (four rounds total).</li>
+        <li><strong>Standard weekly visit</strong> — a normal round.</li>
+        <li><strong>Start or renew an agreement with 2 weeks paid down</strong> — 2x the draws in their round.</li>
+        <li><strong>Pay a full month down</strong> — 3x the draws <strong>+ 1 BONUS draw</strong> on top.</li>
       </ol>
       <p class="hint-text">Treat these numbers as a starting example, not a fixed rule — set whatever tiers make sense for your store's current promotion, and post them somewhere customers can see.</p>
 
-      <p class="script-label">Running bonus rounds in the app</p>
-      <p>The app doesn't apply bonus draws automatically — after a customer earns extra rounds, just click <strong>End Round / Next Customer</strong>, then immediately pull the same customer back up and click <strong>Start Round</strong> again for each earned round. Their card carries over automatically.</p>
+      <p class="script-label">Running bonus draws in the app</p>
+      <p>Since a round has no limit on balls, bonus draws are simple: just keep pulling balls for the customer, right through their standard amount and into their earned bonus balls, all in the same round. Click <strong>Submit Round / Next Customer</strong> only once you're completely done with all of it — everything gets saved together.</p>
 
-      <p class="script-label">About the weekly alert during bonus rounds</p>
-      <p>Playing several bonus rounds in one visit will correctly trigger the "already played this week" warning on the 2nd+ round — that's expected, not a bug. It's just a heads-up; go ahead and continue.</p>
+      <p class="script-label">About the weekly alert</p>
+      <p>Since bonus balls happen inside the same round now, the "already played this week" warning only checks once, when you start the round — it won't interrupt you repeatedly while you draw their bonus balls.</p>
 
       <ol>
         <li>Celebrate wins loudly — the fireworks and popup are made for the moment. Let nearby customers see it happen.</li>
@@ -260,7 +260,7 @@
     <div class="win-modal-amount" id="winModalAmount"></div>
     <div class="win-modal-actions">
       <button type="button" id="winModalPrintBtn" class="btn btn-ghost">Print Certificate 🖨</button>
-      <button type="button" id="winModalAckBtn" class="btn btn-primary btn-big">Notify Customer ✓</button>
+      <button type="button" id="winModalAckBtn" class="btn btn-primary btn-big">Continue Playing ▶</button>
     </div>
   </div>
 </div>
