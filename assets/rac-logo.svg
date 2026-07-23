@@ -1,0 +1,38 @@
+<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <path id="arcTop" d="M 134,102 A 258,258 0 0,1 466,102" />
+    <path id="arcRight" d="M 498,134 A 258,258 0 0,1 498,466" />
+    <path id="arcBottom" d="M 134,498 A 258,258 0 0,0 466,498" />
+    <path id="arcLeft" d="M 102,466 A 258,258 0 0,1 102,134" />
+  </defs>
+
+  <circle cx="300" cy="300" r="295" fill="#ee4238"/>
+  <circle cx="300" cy="300" r="228" fill="#1c5ea8"/>
+
+  <!-- Ring text -->
+  <g font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="34" fill="#ffffff" letter-spacing="2">
+    <text><textPath href="#arcTop" startOffset="50%" text-anchor="middle">APPLIANCES</textPath></text>
+    <text><textPath href="#arcRight" startOffset="50%" text-anchor="middle">ELECTRONICS</textPath></text>
+    <text><textPath href="#arcBottom" startOffset="50%" text-anchor="middle">COMPUTERS</textPath></text>
+    <text><textPath href="#arcLeft" startOffset="50%" text-anchor="middle">FURNITURE</textPath></text>
+  </g>
+
+  <!-- Bullet separators at the 4 diagonals -->
+  <circle cx="466" cy="102" r="6" fill="#ffffff"/>
+  <circle cx="498" cy="466" r="6" fill="#ffffff"/>
+  <circle cx="134" cy="498" r="6" fill="#ffffff"/>
+  <circle cx="102" cy="134" r="6" fill="#ffffff"/>
+
+  <!-- Diagonal accent bar behind RAC -->
+  <rect x="150" y="195" width="300" height="26" rx="3" fill="#ee4238" transform="rotate(-8 300 300)"/>
+
+  <!-- RAC wordmark -->
+  <text x="300" y="320" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+        font-weight="900" font-style="italic" font-size="150" fill="#ffd400"
+        stroke="#ffd400" stroke-width="1">RAC</text>
+
+  <!-- Rent-A-Center script -->
+  <text x="300" y="378" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif"
+        font-style="italic" font-weight="700" font-size="38" fill="#ffffff">Rent&#8226;A&#8226;Center</text>
+  <text x="466" y="362" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#ffffff">&#174;</text>
+</svg>

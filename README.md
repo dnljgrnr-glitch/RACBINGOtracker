@@ -55,22 +55,24 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   the win and payout, with buttons to print a certificate and to **Continue Playing** — the
   round keeps going with every ball and all progress intact, so a customer can keep drawing
   from a Line win up through Four Corners or a full Blackout in one continuous round.
-- **Redeeming a reward** — redemption is tracked separately from winning, since a customer
-  might not cash in right away. In the History tab, every unredeemed win has a "Confirm
-  Redemption & New Card" button — it checks the reward off with today's date logged, and
-  immediately takes you to the Play Round screen with that customer selected and ready for
-  their next card.
-- **Printable certificate** — available from the win popup or anytime later from History.
-  Recreates the RAC Cash voucher look (logo, ornate corners, cart/handshake icons, fine
-  print) for the exact dollar amount won, centered on the page with a personalized
-  congratulatory message, a thank-you note from the team, and a staff redemption line at the
-  bottom. Printing uses your browser's normal print dialog (Ctrl/Cmd+P equivalent, triggered
+- **One certificate per round, not per milestone** — redemption covers everything a round
+  has won so far, all at once. In History, every round with a win shows a single line (e.g.
+  "Row 3, Four Corners — $100 total") with one "Confirm Redemption & New Card" button — it
+  checks the whole round off with today's date logged, and jumps straight to starting their
+  next round. A customer can redeem at any point, not just after reaching Blackout.
+- **Printable certificate** — available from the win popup or anytime later from History,
+  and always reflects the round's current running total (not just the tier that was just
+  hit). Recreates the RAC Cash voucher look (logo, ornate corners, cart/handshake icons, fine
+  print) for that total, with a breakdown table when more than one milestone contributed.
+  Reaching a full Blackout automatically turns it into a "GRAND PRIZE" $200 certificate.
+  Printing uses your browser's normal print dialog (Ctrl/Cmd+P equivalent, triggered
   automatically).
 - **Fixing mistakes** — every round in History can be edited at any time via "Edit Round":
   reassign it to a different customer (for a wrong-name pull), add or remove individual
   drawn balls (for an invalid entry), or delete the round outright. Wins are automatically
-  rechecked against the edited data, so prizes stay accurate — a pattern that still holds
-  keeps its original redeemed status; one that no longer holds is dropped.
+  rechecked against the edited data, so prizes stay accurate. Editing never changes whether
+  the round has already been redeemed — that's left to staff judgment if the total changes
+  after the fact.
 - **Help tab** — a full, step-by-step reference for every feature in the app, written for
   quick lookup at the table. It ends with a **Tips & Scripts** section: ready-to-use lines
   for introducing the game, announcing a win, and pitching a promotion, plus an example
@@ -136,3 +138,7 @@ copy outside the browser.
 - Card ID on the printed card is generated from the customer's internal ID plus the issue
   date (e.g. `RB-F8QZ5V-072126`) — it's for matching a physical card back to its digital
   record, not a security feature.
+- The RAC logo (`assets/rac-logo.svg`) is a hand-recreated vector version with a transparent
+  background, built from the provided reference image rather than the original source file —
+  swap it out for the real asset if you ever get an exported copy. Used on the printed card's
+  front and the certificate voucher.

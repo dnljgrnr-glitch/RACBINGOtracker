@@ -24,9 +24,10 @@
 
   // Each prize tier (Line / Corners / Blackout) can only be won once per
   // round — completing a second line after the first doesn't add another
-  // $25. Existing win records are reused as-is (preserving redeemed status
-  // and timestamp) whenever their tier is still satisfied by any current
+  // $25. Existing win records are reused as-is (preserving their original
+  // timestamp) whenever their tier is still satisfied by any current
   // pattern, even if the originally-recorded specific pattern changed.
+  // Redemption is tracked per round, not per win (see round.redeemed).
   function computeTierWins(patterns, existingWins) {
     const wins = [];
     TIER_KEYS.forEach(key => {
@@ -37,13 +38,31 @@
         wins.push(existing);
       } else {
         const tier = tierFor(qualifyingPattern);
-        wins.push({
-          pattern: qualifyingPattern, prize: tier.prize, label: tier.label,
-          timestamp: Date.now(), redeemed: false, redeemedAt: null
-        });
+        wins.push({ pattern: qualifyingPattern, prize: tier.prize, label: tier.label, timestamp: Date.now() });
       }
     });
     return wins;
+  }
+
+  function roundTotal(wins) {
+    return wins.reduce((sum, w) => sum + w.prize, 0);
+  }
+
+  // Certificate content is one document per round reflecting whatever the
+  // customer has accumulated so far (they can redeem at any point). Reaching
+  // Blackout always implies Line + Corners were also won (a fully-covered
+  // card necessarily contains complete lines and all four corners), so the
+  // $200 "grand" case is the only way all three ever appear together.
+  function certificateInfo(wins) {
+    const total = roundTotal(wins);
+    const hasBlackout = wins.some(w => tierKeyFor(w.pattern) === "BLACKOUT");
+    const hasCorners = wins.some(w => tierKeyFor(w.pattern) === "CORNERS");
+    const lineWin = wins.find(w => tierKeyFor(w.pattern) === "LINE");
+    let headline = "RACBINGO Win!";
+    if (hasBlackout) headline = "GRAND CERTIFICATE — FULL BINGO!";
+    else if (hasCorners) headline = "Four Corners Win!";
+    else if (lineWin) headline = `${lineWin.label} Win!`;
+    return { total, isGrand: hasBlackout, headline, breakdown: wins.slice() };
   }
 
   // ---------- Persistence ----------
@@ -59,6 +78,16 @@
       const parsed = JSON.parse(raw);
       if (!parsed.customers || !parsed.history) return defaultData();
       if (parsed.currentRound === undefined) parsed.currentRound = null;
+      // Migrate older data where redemption was tracked per win instead of
+      // per round (a round is redeemed only if every one of its wins was).
+      parsed.history.forEach(round => {
+        if (round.redeemed === undefined) {
+          round.redeemed = round.wins.length > 0 && round.wins.every(w => w.redeemed);
+          round.redeemedAt = round.wins.reduce((latest, w) => {
+            return w.redeemedAt && (!latest || w.redeemedAt > latest) ? w.redeemedAt : latest;
+          }, null);
+        }
+      });
       return parsed;
     } catch (e) {
       console.error("Failed to load RACBINGO data, starting fresh.", e);
@@ -165,13 +194,9 @@
     return !!customer.lastPlayedAt && (Date.now() - customer.lastPlayedAt) < WEEK_MS;
   }
 
+  // Rounds this customer won something on but hasn't redeemed yet.
   function pendingRewardsFor(customerId) {
-    const wins = [];
-    state.history.forEach(round => {
-      if (round.customerId !== customerId) return;
-      round.wins.forEach(w => { if (!w.redeemed) wins.push(w); });
-    });
-    return wins;
+    return state.history.filter(r => r.customerId === customerId && r.wins.length > 0 && !r.redeemed);
   }
 
   function roundsFor(customerId) {
@@ -311,20 +336,23 @@
       endedAt: Date.now(),
       draws: state.currentRound.draws.slice(),
       card: customer ? JSON.parse(JSON.stringify(customer.card)) : null,
-      wins: state.currentRound.wins.slice()
+      wins: state.currentRound.wins.slice(),
+      redeemed: false,
+      redeemedAt: null
     });
     state.currentRound = null;
     selectedCustomerId = null;
     saveData();
   }
 
-  function confirmRedemption(roundId, winIndex) {
+  // Redemption covers everything the round has won, all at once — a
+  // customer can redeem at any point, and the certificate always reflects
+  // their current running total (see certificateInfo).
+  function confirmRedemption(roundId) {
     const round = state.history.find(r => r.id === roundId);
     if (!round) return;
-    const win = round.wins[winIndex];
-    if (!win) return;
-    win.redeemed = true;
-    win.redeemedAt = Date.now();
+    round.redeemed = true;
+    round.redeemedAt = Date.now();
     saveData();
     selectedCustomerId = round.customerId;
     switchTab("game");
@@ -334,9 +362,9 @@
   // ---------- Editing past rounds (mistake corrections) ----------
 
   // Rebuilds a round's wins from scratch against its card + current draws,
-  // one prize per tier (see computeTierWins). A tier that still holds keeps
-  // its original redeemed status/timestamp; one that no longer holds is
-  // dropped; a newly-satisfied tier starts unredeemed.
+  // one prize per tier (see computeTierWins). Editing a round's balls does
+  // not change its redeemed status, even if the total changes as a result —
+  // that's left to staff discretion.
   function recomputeRoundWins(round) {
     if (!round.card) { round.wins = []; return; }
     const drawn = new Set(round.draws);
@@ -739,7 +767,7 @@
         const row = document.createElement("div");
         row.className = "progression-row";
         const winText = round.wins.length
-          ? round.wins.map(w => `${w.label} $${w.prize}${w.redeemed ? " (redeemed)" : ""}`).join(", ")
+          ? `${round.wins.map(w => w.label).join(", ")} — $${roundTotal(round.wins)}${round.redeemed ? " (redeemed)" : ""}`
           : "no win";
         row.textContent = `${formatDate(round.startedAt)} — drew ${round.draws.join(", ") || "none"} — ${winText}`;
         progression.appendChild(row);
@@ -758,10 +786,11 @@
 
     let totalAwarded = 0;
     let totalPending = 0;
-    state.history.forEach(round => round.wins.forEach(w => {
-      totalAwarded += w.prize;
-      if (!w.redeemed) totalPending += w.prize;
-    }));
+    state.history.forEach(round => {
+      const total = roundTotal(round.wins);
+      totalAwarded += total;
+      if (!round.redeemed) totalPending += total;
+    });
     summary.textContent = state.history.length
       ? `Total RACCASH awarded: $${totalAwarded} across ${state.history.length} round${state.history.length === 1 ? "" : "s"}` +
         (totalPending ? ` · $${totalPending} still unredeemed` : "")
@@ -805,42 +834,41 @@
         none.textContent = "No win this round.";
         item.appendChild(none);
       } else {
-        round.wins.forEach((win, idx) => {
-          const row = document.createElement("div");
-          row.className = "win-row";
+        const row = document.createElement("div");
+        row.className = "win-row";
 
-          const label = document.createElement("span");
-          label.className = "win-row-label";
-          label.textContent = `🏆 ${win.label} — $${win.prize}`;
-          row.appendChild(label);
+        const label = document.createElement("span");
+        label.className = "win-row-label";
+        const labels = round.wins.map(w => w.label).join(", ");
+        label.textContent = `🏆 ${labels} — $${roundTotal(round.wins)} total`;
+        row.appendChild(label);
 
-          const actions = document.createElement("span");
-          actions.className = "win-row-actions";
+        const actions = document.createElement("span");
+        actions.className = "win-row-actions";
 
-          const printBtn = document.createElement("button");
-          printBtn.type = "button";
-          printBtn.className = "btn btn-ghost btn-sm";
-          printBtn.textContent = "Print Certificate 🖨";
-          printBtn.addEventListener("click", () => printCertificate(round.customerName, win));
-          actions.appendChild(printBtn);
+        const printBtn = document.createElement("button");
+        printBtn.type = "button";
+        printBtn.className = "btn btn-ghost btn-sm";
+        printBtn.textContent = "Print Certificate 🖨";
+        printBtn.addEventListener("click", () => printCertificate(round.customerName, round.wins));
+        actions.appendChild(printBtn);
 
-          if (win.redeemed) {
-            const tag = document.createElement("span");
-            tag.className = "redeemed-tag";
-            tag.textContent = `Redeemed ${formatDate(win.redeemedAt)}`;
-            actions.appendChild(tag);
-          } else {
-            const redeemBtn = document.createElement("button");
-            redeemBtn.type = "button";
-            redeemBtn.className = "btn btn-primary btn-sm";
-            redeemBtn.textContent = "Confirm Redemption & New Card";
-            redeemBtn.addEventListener("click", () => confirmRedemption(round.id, idx));
-            actions.appendChild(redeemBtn);
-          }
+        if (round.redeemed) {
+          const tag = document.createElement("span");
+          tag.className = "redeemed-tag";
+          tag.textContent = `Redeemed ${formatDate(round.redeemedAt)}`;
+          actions.appendChild(tag);
+        } else {
+          const redeemBtn = document.createElement("button");
+          redeemBtn.type = "button";
+          redeemBtn.className = "btn btn-primary btn-sm";
+          redeemBtn.textContent = "Confirm Redemption & New Card";
+          redeemBtn.addEventListener("click", () => confirmRedemption(round.id));
+          actions.appendChild(redeemBtn);
+        }
 
-          row.appendChild(actions);
-          item.appendChild(row);
-        });
+        row.appendChild(actions);
+        item.appendChild(row);
       }
 
       list.appendChild(item);
@@ -1030,12 +1058,13 @@
 
   // ---------- Printable certificate ----------
 
-  function voucherHTML(amount) {
+  function voucherHTML(amount, isGrand) {
     return `
-      <div class="voucher">
+      <div class="voucher${isGrand ? " voucher-grand" : ""}">
+        ${isGrand ? '<div class="voucher-grand-badge">★ GRAND PRIZE ★</div>' : ""}
         <div class="voucher-corner voucher-corner-tl">$${amount}</div>
         <div class="voucher-corner voucher-corner-tr">$${amount}</div>
-        <div class="voucher-brand">RAC</div>
+        <div class="voucher-brand"><img src="assets/rac-logo.svg" alt="RAC" class="voucher-brand-img"></div>
         <div class="voucher-title">RAC CASH</div>
         <div class="voucher-amount">$${amount}</div>
         <div class="voucher-icons">
@@ -1058,6 +1087,20 @@
       </div>`;
   }
 
+  // Only shown when a certificate covers more than one tier, to make the
+  // total transparent (e.g. a $200 grand certificate = $25 + $75 + $100).
+  function certBreakdownHTML(breakdown, total) {
+    if (breakdown.length <= 1) return "";
+    const rows = breakdown.map(w =>
+      `<div class="cert-breakdown-row"><span>${escapeHtml(w.label)}</span><span>$${w.prize}</span></div>`
+    ).join("");
+    return `
+      <div class="cert-breakdown">
+        ${rows}
+        <div class="cert-breakdown-row cert-breakdown-total"><span>TOTAL</span><span>$${total}</span></div>
+      </div>`;
+  }
+
   function thankYouMessage(customerName) {
     return `Dear ${escapeHtml(customerName)},<br><br>
       From all of us on the team here at Rent-A-Center — thank you! Nights like our RACBINGO
@@ -1075,11 +1118,19 @@
     return div.innerHTML;
   }
 
-  function printCertificate(customerName, win) {
+  // A round has exactly one certificate, reflecting everything the customer
+  // has won so far this round — not one certificate per tier. Reaching
+  // Blackout means all three tiers are present, so this naturally becomes
+  // the $200 grand certificate at that point.
+  function printCertificate(customerName, wins) {
+    if (!wins || wins.length === 0) return;
+    const info = certificateInfo(wins);
+    const latestTimestamp = Math.max(...wins.map(w => w.timestamp));
     document.getElementById("certName").textContent = customerName;
     document.getElementById("certSubline").textContent =
-      `${win.label} win — ${new Date(win.timestamp).toLocaleDateString()}`;
-    document.getElementById("certVoucher").innerHTML = voucherHTML(win.prize);
+      `${info.headline} — ${new Date(latestTimestamp).toLocaleDateString()}`;
+    document.getElementById("certVoucher").innerHTML = voucherHTML(info.total, info.isGrand);
+    document.getElementById("certBreakdown").innerHTML = certBreakdownHTML(info.breakdown, info.total);
     document.getElementById("certThankYou").innerHTML = thankYouMessage(customerName);
     document.body.classList.add("printing-cert");
     window.print();
@@ -1123,11 +1174,7 @@
     return `
       <div class="card-print-page card-front">
         <div class="cf-header">
-          <div class="cf-logo">
-            <div class="cf-logo-bars"></div>
-            <div class="cf-logo-text">RAC</div>
-            <div class="cf-logo-caption">Rent-A-Center</div>
-          </div>
+          <div class="cf-logo"><img src="assets/rac-logo.svg" alt="RAC" class="cf-logo-img"></div>
           <div class="cf-title">
             <div class="cf-title-main">RAC <span>BINGO</span></div>
             <div class="cf-title-sub">★ FREE WEEKLY CUSTOMER APPRECIATION PROGRAM ★</div>
@@ -1237,21 +1284,16 @@
   }
 
   function exportCsv() {
-    const rows = [["Round Started", "Customer", "Balls Drawn", "Pattern", "Prize", "Redeemed", "Redeemed Date"]];
+    const rows = [["Round Started", "Customer", "Balls Drawn", "Milestones Won", "Total Prize", "Redeemed", "Redeemed Date"]];
     state.history.forEach(round => {
       const started = new Date(round.startedAt).toLocaleString();
       const balls = round.draws.join(" ");
-      if (round.wins.length === 0) {
-        rows.push([started, round.customerName, balls, "", "", "", ""]);
-      } else {
-        round.wins.forEach(w => {
-          rows.push([
-            started, round.customerName, balls, w.label, w.prize,
-            w.redeemed ? "Yes" : "No",
-            w.redeemed ? new Date(w.redeemedAt).toLocaleString() : ""
-          ]);
-        });
-      }
+      const milestones = round.wins.map(w => w.label).join(" + ");
+      rows.push([
+        started, round.customerName, balls, milestones, roundTotal(round.wins),
+        round.wins.length === 0 ? "" : (round.redeemed ? "Yes" : "No"),
+        round.redeemed ? new Date(round.redeemedAt).toLocaleString() : ""
+      ]);
     });
     const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -1380,7 +1422,14 @@
 
   document.getElementById("winModalAckBtn").addEventListener("click", dismissWinModal);
   document.getElementById("winModalPrintBtn").addEventListener("click", () => {
-    if (activeModalWin) printCertificate(activeModalWin.customerName, activeModalWin);
+    if (!activeModalWin) return;
+    // Print reflects everything won in the round so far, not just this one
+    // milestone — fall back to the single win if the round somehow isn't
+    // live anymore (e.g. it was already submitted).
+    const wins = (state.currentRound && state.currentRound.customerId)
+      ? state.currentRound.wins
+      : [activeModalWin];
+    printCertificate(activeModalWin.customerName, wins);
   });
 
   render();

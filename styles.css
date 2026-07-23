@@ -518,6 +518,26 @@ input[type="number"], input[type="text"], input[type="search"] {
   max-width: 560px;
   background: repeating-linear-gradient(135deg, #fdfdfa, #fdfdfa 6px, #f4f3ee 6px, #f4f3ee 12px);
 }
+.voucher-grand {
+  border-color: #d4a017;
+  border-width: 4px;
+  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.35);
+  padding-top: 40px;
+}
+.voucher-grand-badge {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #d4a017;
+  color: #1a1300;
+  font-weight: 900;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  padding: 4px 16px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
 .voucher-corner {
   position: absolute;
   top: 8px;
@@ -536,20 +556,8 @@ input[type="number"], input[type="text"], input[type="search"] {
 .voucher-corner-tr { right: 8px; }
 .voucher-corner-bl { left: 8px; bottom: 8px; top: auto; }
 .voucher-corner-br { right: 8px; bottom: 8px; top: auto; }
-.voucher-brand {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: #1a1a1a;
-  color: #fff;
-  font-weight: 900;
-  font-size: 0.95rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 6px;
-  letter-spacing: 1px;
-}
+.voucher-brand { margin: 0 auto 6px; }
+.voucher-brand-img { width: 56px; height: 56px; display: block; margin: 0 auto; }
 .voucher-title { font-size: 1.6rem; font-weight: 900; letter-spacing: 2px; margin-bottom: 2px; }
 .voucher-amount { font-size: 3.4rem; font-weight: 900; margin-bottom: 14px; }
 .voucher-icons {
@@ -591,6 +599,28 @@ input[type="number"], input[type="text"], input[type="search"] {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.5px;
+}
+
+.cert-breakdown {
+  max-width: 400px;
+  margin: 0 auto 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cert-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  color: #333;
+  border-bottom: 1px solid #e5e5e0;
+}
+.cert-breakdown-row:last-child { border-bottom: none; }
+.cert-breakdown-total {
+  background: #f4f3ee;
+  font-weight: 900;
+  color: #1a1300;
 }
 
 .cert-instructions { color: #444; font-size: 0.95rem; margin: 0 0 20px; }
@@ -652,16 +682,8 @@ input[type="number"], input[type="text"], input[type="search"] {
   color: #fff;
   padding: 6px 10px;
 }
-.cf-logo {
-  background: #fff;
-  border-radius: 4px;
-  padding: 3px 6px;
-  text-align: center;
-  flex-shrink: 0;
-}
-.cf-logo-bars { height: 3px; background: linear-gradient(90deg, var(--gold) 50%, var(--rac-red) 50%); margin-bottom: 2px; }
-.cf-logo-text { font-weight: 900; font-size: 0.95rem; color: var(--rac-red); letter-spacing: 0.5px; line-height: 1; }
-.cf-logo-caption { font-size: 0.56rem; font-weight: 700; color: #1a1a1a; white-space: nowrap; }
+.cf-logo { flex-shrink: 0; }
+.cf-logo-img { width: 44px; height: 44px; display: block; }
 .cf-title { flex: 1; text-align: center; }
 .cf-title-main { font-weight: 900; font-size: 1.6rem; letter-spacing: 1px; line-height: 1; }
 .cf-title-main span { color: var(--rac-red); }

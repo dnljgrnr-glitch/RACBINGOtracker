@@ -144,7 +144,7 @@
       <ol>
         <li>The app checks for a win after every ball — <strong>Line = $25</strong>, <strong>Four Corners = $75</strong>, <strong>Full BINGO = $100</strong>.</li>
         <li>Each tier only pays out <strong>once per round</strong>. Once any single row, column, or diagonal completes, that's the one $25 Line prize — finishing more lines afterward doesn't add another. The next milestone up is Four Corners, then Full BINGO.</li>
-        <li>A win triggers fireworks and a popup. Click <strong>Print Certificate</strong> to hand the customer a redeemable certificate, then <strong>Continue Playing ▶</strong> — the round keeps going with all progress intact, so they can keep drawing toward the next milestone (Line → Four Corners → Full BINGO).</li>
+        <li>A win triggers fireworks and a popup, then <strong>Continue Playing ▶</strong> keeps the round going with all progress intact, so they can keep drawing toward the next milestone. A round is worth one certificate, not one per milestone — it always reflects their current running total, up to $200 ($25 + $75 + $100) if they reach a full Blackout.</li>
       </ol>
 
       <h2 class="help-title">Submitting or Canceling a Round</h2>
@@ -155,9 +155,9 @@
 
       <h2 class="help-title">Redeeming a Reward</h2>
       <ol>
-        <li>Go to <strong>History</strong>.</li>
-        <li>Find the win and click <strong>Confirm Redemption &amp; New Card</strong> — this logs today's date and takes you straight to starting their next round.</li>
-        <li>Reprint a certificate anytime with <strong>Print Certificate</strong>, even after it's been redeemed.</li>
+        <li>Go to <strong>History</strong>. Every round with a win shows its total prize as one line — e.g. "Row 3, Four Corners — $100 total" — not a separate line per milestone.</li>
+        <li>Click <strong>Confirm Redemption &amp; New Card</strong> to log today's date against the round's full total and jump straight to starting their next round. A customer can redeem at any point — you don't need to wait for them to reach Blackout.</li>
+        <li>Click <strong>Print Certificate</strong> anytime, before or after redeeming, to hand over (or reprint) their certificate — it always shows the round's current total, and reaching Full BINGO turns it into a grand $200 certificate automatically.</li>
       </ol>
 
       <h2 class="help-title">Fixing Mistakes (Any Time)</h2>
@@ -275,6 +275,7 @@
       <p id="certSubline"></p>
     </div>
     <div class="cert-voucher" id="certVoucher"></div>
+    <div id="certBreakdown"></div>
     <p class="cert-instructions">Present this certificate in-store to redeem your RAC Cash toward any new agreement.</p>
     <div class="cert-thankyou" id="certThankYou"></div>
     <div class="cert-verify">
