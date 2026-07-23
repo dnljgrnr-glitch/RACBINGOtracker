@@ -44,10 +44,13 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   "Cancel Round" discards it entirely without saving anything — for a wrong customer pulled
   up by mistake, or any other reason to scrap it — and restores their previous "last played"
   status untouched.
-- **Prizes**, checked live after every ball:
-  - **Line** (any row, column, or diagonal) = **$25 RACCASH**
+- **Prizes**, checked live after every ball — each tier pays out **once per round**:
+  - **Line** (any row, column, or diagonal) = **$25 RACCASH** — the first line completed
+    wins this once; finishing more lines afterward doesn't add another $25.
   - **Four Corners** = **$75 RACCASH**
   - **Full BINGO** (blackout) = **$100 RACCASH**
+  - Max payout per round is $200 ($25 + $75 + $100), reached by progressing through all
+    three milestones in order.
 - **Win celebration** — the instant a customer hits a tier, fireworks play and a popup names
   the win and payout, with buttons to print a certificate and to **Continue Playing** — the
   round keeps going with every ball and all progress intact, so a customer can keep drawing

@@ -66,6 +66,7 @@ body {
   color: var(--text-dim);
 }
 .prize-legend strong { color: var(--win); }
+.prize-legend-note { font-style: italic; opacity: 0.75; }
 
 main { max-width: 900px; margin: 0 auto; padding: 20px; padding-bottom: 80px; }
 

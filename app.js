@@ -8,11 +8,42 @@
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
   const PRIZES = { LINE: 25, CORNERS: 75, BLACKOUT: 100 };
+  const TIER_KEYS = ["LINE", "CORNERS", "BLACKOUT"];
 
   function tierFor(pattern) {
     if (pattern === "Four Corners") return { prize: PRIZES.CORNERS, label: "Four Corners" };
     if (pattern === "Blackout") return { prize: PRIZES.BLACKOUT, label: "Full BINGO" };
     return { prize: PRIZES.LINE, label: pattern };
+  }
+
+  function tierKeyFor(pattern) {
+    if (pattern === "Four Corners") return "CORNERS";
+    if (pattern === "Blackout") return "BLACKOUT";
+    return "LINE"; // any row, column, or diagonal
+  }
+
+  // Each prize tier (Line / Corners / Blackout) can only be won once per
+  // round — completing a second line after the first doesn't add another
+  // $25. Existing win records are reused as-is (preserving redeemed status
+  // and timestamp) whenever their tier is still satisfied by any current
+  // pattern, even if the originally-recorded specific pattern changed.
+  function computeTierWins(patterns, existingWins) {
+    const wins = [];
+    TIER_KEYS.forEach(key => {
+      const qualifyingPattern = patterns.find(p => tierKeyFor(p) === key);
+      if (!qualifyingPattern) return;
+      const existing = existingWins.find(w => tierKeyFor(w.pattern) === key);
+      if (existing) {
+        wins.push(existing);
+      } else {
+        const tier = tierFor(qualifyingPattern);
+        wins.push({
+          pattern: qualifyingPattern, prize: tier.prize, label: tier.label,
+          timestamp: Date.now(), redeemed: false, redeemedAt: null
+        });
+      }
+    });
+    return wins;
   }
 
   // ---------- Persistence ----------
@@ -241,8 +272,8 @@
     const customer = findCustomer(state.currentRound.customerId);
     if (customer) {
       const matrix = hitMatrix(customer, drawnSet());
-      const stillValid = achievedPatterns(matrix);
-      state.currentRound.wins = state.currentRound.wins.filter(w => stillValid.includes(w.pattern));
+      const patterns = achievedPatterns(matrix);
+      state.currentRound.wins = computeTierWins(patterns, state.currentRound.wins);
     }
     saveData();
   }
@@ -260,15 +291,13 @@
     if (!customer || !cardComplete(customer)) return;
     const matrix = hitMatrix(customer, drawnSet());
     const patterns = achievedPatterns(matrix);
-    patterns.forEach(pattern => {
-      const already = state.currentRound.wins.some(w => w.pattern === pattern);
-      if (!already) {
-        const tier = tierFor(pattern);
-        const win = { pattern, prize: tier.prize, label: tier.label, timestamp: Date.now(), redeemed: false, redeemedAt: null };
-        state.currentRound.wins.push(win);
-        pendingWinPopups.push({ customerName: customer.name, ...win });
+    const newWins = computeTierWins(patterns, state.currentRound.wins);
+    newWins.forEach(w => {
+      if (!state.currentRound.wins.includes(w)) {
+        pendingWinPopups.push({ customerName: customer.name, ...w });
       }
     });
+    state.currentRound.wins = newWins;
   }
 
   function endRound() {
@@ -304,21 +333,16 @@
 
   // ---------- Editing past rounds (mistake corrections) ----------
 
-  // Rebuilds a round's wins from scratch against its card + current draws.
-  // Patterns that still hold keep their original redeemed status/timestamp;
-  // patterns that no longer hold are dropped; newly-created patterns start
-  // unredeemed.
+  // Rebuilds a round's wins from scratch against its card + current draws,
+  // one prize per tier (see computeTierWins). A tier that still holds keeps
+  // its original redeemed status/timestamp; one that no longer holds is
+  // dropped; a newly-satisfied tier starts unredeemed.
   function recomputeRoundWins(round) {
     if (!round.card) { round.wins = []; return; }
     const drawn = new Set(round.draws);
     const matrix = hitMatrix({ card: round.card }, drawn);
     const patterns = achievedPatterns(matrix);
-    round.wins = patterns.map(pattern => {
-      const existing = round.wins.find(w => w.pattern === pattern);
-      if (existing) return existing;
-      const tier = tierFor(pattern);
-      return { pattern, prize: tier.prize, label: tier.label, timestamp: Date.now(), redeemed: false, redeemedAt: null };
-    });
+    round.wins = computeTierWins(patterns, round.wins);
   }
 
   function reassignRoundCustomer(roundId, newCustomerId) {
