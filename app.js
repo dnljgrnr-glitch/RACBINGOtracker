@@ -7,7 +7,7 @@
   const FREE = "FREE";
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-  const PRIZES = { LINE: 25, CORNERS: 75, BLACKOUT: 100 };
+  const PRIZES = { LINE: 25, CORNERS: 50, BLACKOUT: 100 };
   const TIER_KEYS = ["LINE", "CORNERS", "BLACKOUT"];
 
   function tierFor(pattern) {
@@ -52,7 +52,8 @@
   // customer has accumulated so far (they can redeem at any point). Reaching
   // Blackout always implies Line + Corners were also won (a fully-covered
   // card necessarily contains complete lines and all four corners), so the
-  // $200 "grand" case is the only way all three ever appear together.
+  // $175 "grand" case ($25 + $50 + $100) is the only way all three ever
+  // appear together.
   function certificateInfo(wins) {
     const total = roundTotal(wins);
     const hasBlackout = wins.some(w => tierKeyFor(w.pattern) === "BLACKOUT");
@@ -88,6 +89,15 @@
           }, null);
         }
       });
+      // Migrate older data recorded when Four Corners incorrectly paid $75
+      // instead of $50 — corrects both past rounds and an in-progress one.
+      const fixCornersPrize = wins => {
+        (wins || []).forEach(w => {
+          if (w.pattern === "Four Corners" && w.prize !== PRIZES.CORNERS) w.prize = PRIZES.CORNERS;
+        });
+      };
+      parsed.history.forEach(round => fixCornersPrize(round.wins));
+      if (parsed.currentRound) fixCornersPrize(parsed.currentRound.wins);
       return parsed;
     } catch (e) {
       console.error("Failed to load RACBINGO data, starting fresh.", e);
@@ -1088,7 +1098,7 @@
   }
 
   // Only shown when a certificate covers more than one tier, to make the
-  // total transparent (e.g. a $200 grand certificate = $25 + $75 + $100).
+  // total transparent (e.g. a $175 grand certificate = $25 + $50 + $100).
   function certBreakdownHTML(breakdown, total) {
     if (breakdown.length <= 1) return "";
     const rows = breakdown.map(w =>
@@ -1121,7 +1131,7 @@
   // A round has exactly one certificate, reflecting everything the customer
   // has won so far this round — not one certificate per tier. Reaching
   // Blackout means all three tiers are present, so this naturally becomes
-  // the $200 grand certificate at that point.
+  // the $175 grand certificate at that point.
   function printCertificate(customerName, wins) {
     if (!wins || wins.length === 0) return;
     const info = certificateInfo(wins);

@@ -47,10 +47,12 @@ No backend, no accounts, no build step. All data is stored locally in your brows
 - **Prizes**, checked live after every ball — each tier pays out **once per round**:
   - **Line** (any row, column, or diagonal) = **$25 RACCASH** — the first line completed
     wins this once; finishing more lines afterward doesn't add another $25.
-  - **Four Corners** = **$75 RACCASH**
-  - **Full BINGO** (blackout) = **$100 RACCASH**
-  - Max payout per round is $200 ($25 + $75 + $100), reached by progressing through all
-    three milestones in order.
+  - **Four Corners** = **$50 RACCASH** — independent of Line; a customer can hit Four
+    Corners before ever completing a line, and both still pay out separately.
+  - **Full BINGO** (blackout) = **$100 RACCASH** — a fully-covered card always contains
+    complete lines and all four corners too, so reaching Blackout guarantees all three
+    tiers are present.
+  - Max payout per round is $175 ($25 + $50 + $100).
 - **Win celebration** — the instant a customer hits a tier, fireworks play and a popup names
   the win and payout, with buttons to print a certificate and to **Continue Playing** — the
   round keeps going with every ball and all progress intact, so a customer can keep drawing
@@ -64,7 +66,7 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   and always reflects the round's current running total (not just the tier that was just
   hit). Recreates the RAC Cash voucher look (logo, ornate corners, cart/handshake icons, fine
   print) for that total, with a breakdown table when more than one milestone contributed.
-  Reaching a full Blackout automatically turns it into a "GRAND PRIZE" $200 certificate.
+  Reaching a full Blackout automatically turns it into a "GRAND PRIZE" $175 certificate.
   Printing uses your browser's normal print dialog (Ctrl/Cmd+P equivalent, triggered
   automatically).
 - **Fixing mistakes** — every round in History can be edited at any time via "Edit Round":
@@ -126,13 +128,13 @@ copy outside the browser.
 - Only one round can be active at a time, matching the single physical ball machine.
 - "Played this week" is a rolling 7 days from their last round's start time, not a calendar
   week — adjust in `app.js` (`WEEK_MS`) if you'd rather it reset on a fixed day.
-- The $25 / $75 / $100 voucher graphics on the printable certificate are a coded recreation
+- The $25 / $50 / $100 voucher graphics on the printable certificate are a coded recreation
   of the RAC Cash template's look (not the literal scanned artwork), since those exact
   denominations aren't among the pre-printed vouchers you provided.
 - The printable card's 4x6 landscape page size is set via a named CSS page (`@page
   card-page`), which is well supported in Chrome/Edge. If you print from a browser that
   ignores it, just set the paper size to 4x6 (or "Index Card") manually in the print dialog.
-- The card's back lists the real, current prize tiers ($25/$75/$100) rather than a flat
+- The card's back lists the real, current prize tiers ($25/$50/$100) rather than a flat
   amount, and its store address/phone are hardcoded in `app.js` (`STORE_ADDRESS`,
   `STORE_PHONE`) — update those if the store location changes.
 - Card ID on the printed card is generated from the customer's internal ID plus the issue
