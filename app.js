@@ -10,6 +10,32 @@
   const PRIZES = { LINE: 25, CORNERS: 50, BLACKOUT: 100 };
   const TIER_KEYS = ["LINE", "CORNERS", "BLACKOUT"];
 
+  // ---------- Authentication (local-only lock screen) ----------
+  // This is a client-side gate for one shared store computer, not real
+  // security — there's no backend, so these credentials live in this file
+  // and anyone with browser dev tools could read or bypass them. It's meant
+  // to keep casual customers from poking at the register computer, not to
+  // withstand a determined attacker. Revisit this properly once there's a
+  // real backend with accounts.
+  const AUTH_USERNAME = "650Goats";
+  const AUTH_PASSWORD = "Goat650$";
+  const AUTH_SESSION_KEY = "racbingo_authed";
+
+  function isLoggedIn() {
+    return sessionStorage.getItem(AUTH_SESSION_KEY) === "true";
+  }
+
+  function showApp() {
+    document.getElementById("loginScreen").hidden = true;
+    document.getElementById("appRoot").hidden = false;
+  }
+
+  function showLoginScreen() {
+    document.getElementById("appRoot").hidden = true;
+    document.getElementById("loginScreen").hidden = false;
+    document.getElementById("loginUsername").focus();
+  }
+
   function tierFor(pattern) {
     if (pattern === "Four Corners") return { prize: PRIZES.CORNERS, label: "Four Corners" };
     if (pattern === "Blackout") return { prize: PRIZES.BLACKOUT, label: "Full BINGO" };
@@ -1440,6 +1466,36 @@
       : [activeModalWin];
     printCertificate(activeModalWin.customerName, wins);
   });
+
+  document.getElementById("loginForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const user = document.getElementById("loginUsername").value.trim();
+    const pass = document.getElementById("loginPassword").value;
+    const errEl = document.getElementById("loginError");
+    const passwordInput = document.getElementById("loginPassword");
+    if (user === AUTH_USERNAME && pass === AUTH_PASSWORD) {
+      sessionStorage.setItem(AUTH_SESSION_KEY, "true");
+      errEl.hidden = true;
+      e.target.reset();
+      showApp();
+    } else {
+      errEl.textContent = "Incorrect username or password.";
+      errEl.hidden = false;
+      passwordInput.value = "";
+      passwordInput.focus();
+    }
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    showLoginScreen();
+  });
+
+  if (isLoggedIn()) {
+    showApp();
+  } else {
+    showLoginScreen();
+  }
 
   render();
 })();

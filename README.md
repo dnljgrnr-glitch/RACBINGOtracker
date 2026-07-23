@@ -8,6 +8,22 @@ printable redeemable certificate the instant they hit a prize tier.
 No backend, no accounts, no build step. All data is stored locally in your browser via
 `localStorage`.
 
+## Signing in
+
+The app opens to a lock screen. Current staff credentials:
+
+- **Username:** `650Goats`
+- **Password:** `Goat650$`
+
+This is a client-side gate for a single shared store computer, not real security — there's
+no backend, so the credentials live in plain text in `app.js` (`AUTH_USERNAME`,
+`AUTH_PASSWORD`) and anyone with browser dev tools could read or bypass them. It exists to
+keep casual customers from poking at the register computer, not to withstand a determined
+attacker. Once logged in, the session stays active until you click **Log Out** (top right) or
+close the browser — sessions don't carry over between browsers/devices, and there's no
+per-employee login yet. Revisit this properly (real accounts, a backend) before this app
+handles more than one trusted machine.
+
 ## How it works
 
 - **Find or add a customer** — type a name in the search box on the Play Round tab. Existing

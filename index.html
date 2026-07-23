@@ -7,6 +7,22 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<div id="loginScreen" class="login-screen">
+  <form id="loginForm" class="login-card" autocomplete="off">
+    <img src="assets/rac-logo.png" alt="RAC" class="login-logo">
+    <h1>RACBINGO <span>Tracker</span></h1>
+    <p class="login-subtitle">Staff sign-in required</p>
+    <label for="loginUsername">Username</label>
+    <input type="text" id="loginUsername" autocomplete="username" autofocus required>
+    <label for="loginPassword">Password</label>
+    <input type="password" id="loginPassword" autocomplete="current-password" required>
+    <p id="loginError" class="field-error" hidden></p>
+    <button type="submit" class="btn btn-primary btn-big login-submit">Log In</button>
+  </form>
+</div>
+
+<div id="appRoot" hidden>
 <header class="app-header">
   <h1>RACBINGO <span>Tracker</span></h1>
   <nav class="tabs" id="tabs">
@@ -14,6 +30,7 @@
     <button class="tab-btn" data-tab="roster">Roster</button>
     <button class="tab-btn" data-tab="history">History</button>
     <button class="tab-btn" data-tab="help">Help</button>
+    <button type="button" id="logoutBtn" class="tab-btn logout-btn">Log Out</button>
   </nav>
 </header>
 
@@ -230,6 +247,8 @@
   </section>
 
 </main>
+
+</div>
 
 <template id="customerCardTemplate">
   <article class="customer-card">
