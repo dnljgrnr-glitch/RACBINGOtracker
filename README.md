@@ -138,7 +138,6 @@ copy outside the browser.
 - Card ID on the printed card is generated from the customer's internal ID plus the issue
   date (e.g. `RB-F8QZ5V-072126`) — it's for matching a physical card back to its digital
   record, not a security feature.
-- The RAC logo (`assets/rac-logo.svg`) is a hand-recreated vector version with a transparent
-  background, built from the provided reference image rather than the original source file —
-  swap it out for the real asset if you ever get an exported copy. Used on the printed card's
-  front and the certificate voucher.
+- The RAC logo (`assets/rac-logo.png`) is the official artwork, sourced from Wikimedia
+  Commons with a natively transparent background — no editing needed. Used on the printed
+  card's front and the certificate voucher.

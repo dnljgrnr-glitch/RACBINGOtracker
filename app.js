@@ -1064,7 +1064,7 @@
         ${isGrand ? '<div class="voucher-grand-badge">★ GRAND PRIZE ★</div>' : ""}
         <div class="voucher-corner voucher-corner-tl">$${amount}</div>
         <div class="voucher-corner voucher-corner-tr">$${amount}</div>
-        <div class="voucher-brand"><img src="assets/rac-logo.svg" alt="RAC" class="voucher-brand-img"></div>
+        <div class="voucher-brand"><img src="assets/rac-logo.png" alt="RAC" class="voucher-brand-img"></div>
         <div class="voucher-title">RAC CASH</div>
         <div class="voucher-amount">$${amount}</div>
         <div class="voucher-icons">
@@ -1174,7 +1174,7 @@
     return `
       <div class="card-print-page card-front">
         <div class="cf-header">
-          <div class="cf-logo"><img src="assets/rac-logo.svg" alt="RAC" class="cf-logo-img"></div>
+          <div class="cf-logo"><img src="assets/rac-logo.png" alt="RAC" class="cf-logo-img"></div>
           <div class="cf-title">
             <div class="cf-title-main">RAC <span>BINGO</span></div>
             <div class="cf-title-sub">★ FREE WEEKLY CUSTOMER APPRECIATION PROGRAM ★</div>
