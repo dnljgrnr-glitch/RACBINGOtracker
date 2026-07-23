@@ -54,6 +54,19 @@
   // card necessarily contains complete lines and all four corners), so the
   // $175 "grand" case ($25 + $50 + $100) is the only way all three ever
   // appear together.
+  // Real RACCASH bill graphics only exist for $25/$50/$75/$100/$200 (cropped
+  // from the approved templates — see assets/rac-cash-*.png). When a round's
+  // total matches one exactly, show that single bill. The only total that
+  // never has an exact bill is $175 (Line + Corners + Blackout) — for that
+  // case, show one real bill per tier won ($25 + $50 + $100) rather than
+  // ever editing the artwork itself.
+  const BILL_DENOMINATIONS = [25, 50, 75, 100, 200];
+
+  function billsFor(wins, total) {
+    if (BILL_DENOMINATIONS.includes(total)) return [total];
+    return wins.map(w => w.prize).filter(p => BILL_DENOMINATIONS.includes(p));
+  }
+
   function certificateInfo(wins) {
     const total = roundTotal(wins);
     const hasBlackout = wins.some(w => tierKeyFor(w.pattern) === "BLACKOUT");
@@ -63,7 +76,7 @@
     if (hasBlackout) headline = "GRAND CERTIFICATE — FULL BINGO!";
     else if (hasCorners) headline = "Four Corners Win!";
     else if (lineWin) headline = `${lineWin.label} Win!`;
-    return { total, isGrand: hasBlackout, headline, breakdown: wins.slice() };
+    return { total, isGrand: hasBlackout, headline, breakdown: wins.slice(), bills: billsFor(wins, total) };
   }
 
   // ---------- Persistence ----------
@@ -1068,32 +1081,18 @@
 
   // ---------- Printable certificate ----------
 
-  function voucherHTML(amount, isGrand) {
+  // Renders the exact approved RACCASH bill graphic(s) for this certificate
+  // — never a redrawn or edited version. One image when the total matches a
+  // real denomination; multiple stacked bills (summing to the total) when it
+  // doesn't (only the $175 grand case).
+  function billsHTML(bills, isGrand) {
+    const imgs = bills.map(b =>
+      `<img src="assets/rac-cash-${b}.png" alt="RAC CASH $${b}" class="cert-bill-img">`
+    ).join("");
     return `
-      <div class="voucher${isGrand ? " voucher-grand" : ""}">
-        ${isGrand ? '<div class="voucher-grand-badge">★ GRAND PRIZE ★</div>' : ""}
-        <div class="voucher-corner voucher-corner-tl">$${amount}</div>
-        <div class="voucher-corner voucher-corner-tr">$${amount}</div>
-        <div class="voucher-brand"><img src="assets/rac-logo.png" alt="RAC" class="voucher-brand-img"></div>
-        <div class="voucher-title">RAC CASH</div>
-        <div class="voucher-amount">$${amount}</div>
-        <div class="voucher-icons">
-          <div class="voucher-icon-block">
-            <div class="voucher-icon">🛒</div>
-            <div class="voucher-icon-label">GOOD TO<br>BRING IN-STORE ONLY</div>
-          </div>
-          <div class="voucher-icon-block">
-            <div class="voucher-icon">🤝</div>
-            <div class="voucher-icon-label">REDEEM ON ANY<br>NEW AGREEMENT</div>
-          </div>
-        </div>
-        <div class="voucher-footer">
-          <span>$${amount}</span>
-          <span>PROMOTIONAL STORE VOUCHER &bull; NOT LEGAL TENDER &bull; IN-STORE USE ONLY</span>
-          <span>$${amount}</span>
-        </div>
-        <div class="voucher-corner voucher-corner-bl">$${amount}</div>
-        <div class="voucher-corner voucher-corner-br">$${amount}</div>
+      <div class="cert-bills${isGrand ? " cert-bills-grand" : ""}">
+        ${isGrand ? '<div class="cert-grand-badge">★ GRAND PRIZE ★</div>' : ""}
+        ${imgs}
       </div>`;
   }
 
@@ -1139,7 +1138,7 @@
     document.getElementById("certName").textContent = customerName;
     document.getElementById("certSubline").textContent =
       `${info.headline} — ${new Date(latestTimestamp).toLocaleDateString()}`;
-    document.getElementById("certVoucher").innerHTML = voucherHTML(info.total, info.isGrand);
+    document.getElementById("certBills").innerHTML = billsHTML(info.bills, info.isGrand);
     document.getElementById("certBreakdown").innerHTML = certBreakdownHTML(info.breakdown, info.total);
     document.getElementById("certThankYou").innerHTML = thankYouMessage(customerName);
     document.body.classList.add("printing-cert");

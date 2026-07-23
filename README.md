@@ -64,11 +64,12 @@ No backend, no accounts, no build step. All data is stored locally in your brows
   next round. A customer can redeem at any point, not just after reaching Blackout.
 - **Printable certificate** — available from the win popup or anytime later from History,
   and always reflects the round's current running total (not just the tier that was just
-  hit). Recreates the RAC Cash voucher look (logo, ornate corners, cart/handshake icons, fine
-  print) for that total, with a breakdown table when more than one milestone contributed.
-  Reaching a full Blackout automatically turns it into a "GRAND PRIZE" $175 certificate.
-  Printing uses your browser's normal print dialog (Ctrl/Cmd+P equivalent, triggered
-  automatically).
+  hit). Shows the real, approved RACCASH bill graphic for that exact amount — never a
+  redrawn or edited version. $25, $50, $75, and $100 each have their own real bill; the one
+  total with no matching bill ($175, a full Blackout) shows the three real bills that make
+  it up ($25 + $50 + $100) inside a gold "GRAND PRIZE" frame, with a breakdown table
+  underneath. Printing uses your browser's normal print dialog (Ctrl/Cmd+P equivalent,
+  triggered automatically).
 - **Fixing mistakes** — every round in History can be edited at any time via "Edit Round":
   reassign it to a different customer (for a wrong-name pull), add or remove individual
   drawn balls (for an invalid entry), or delete the round outright. Wins are automatically
@@ -128,9 +129,9 @@ copy outside the browser.
 - Only one round can be active at a time, matching the single physical ball machine.
 - "Played this week" is a rolling 7 days from their last round's start time, not a calendar
   week — adjust in `app.js` (`WEEK_MS`) if you'd rather it reset on a fixed day.
-- The $25 / $50 / $100 voucher graphics on the printable certificate are a coded recreation
-  of the RAC Cash template's look (not the literal scanned artwork), since those exact
-  denominations aren't among the pre-printed vouchers you provided.
+- The certificate's bill graphics (`assets/rac-cash-25/50/75/100/200.png`) are cropped
+  directly from your approved RACCASH print templates — not redrawn. $200 is cropped and
+  available but currently unused, since no prize total needs it.
 - The printable card's 4x6 landscape page size is set via a named CSS page (`@page
   card-page`), which is well supported in Chrome/Edge. If you print from a browser that
   ignores it, just set the paper size to 4x6 (or "Index Card") manually in the print dialog.
