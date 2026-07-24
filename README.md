@@ -34,7 +34,10 @@ handles more than one trusted machine.
   Card** to have the app deal a valid card automatically (5 unique numbers per column, drawn
   from that column's official range, with the center free), or enter one by hand from a
   physical card. Previous numbers are pre-filled as a starting point if you're re-entering
-  the same customer.
+  the same customer. Manual entry is checked against the column's number range and against
+  the rest of that customer's card — a number typed in twice anywhere on the card (a likely
+  copy error, since real cards never repeat a number) is rejected with a clear warning
+  instead of being silently accepted.
 - **Print the card** — once a card is complete, **Print Card (Front/Back)** opens the print
   dialog for a 4x6 index card (landscape), using the official RACBINGO card design: front has
   the branded header, customer name/issue date/card ID, and the B-I-N-G-O grid with a
@@ -109,11 +112,15 @@ handles more than one trusted machine.
   week" flag), a clickable pill for each pending unredeemed reward (jumps straight to that
   round in History, highlighted, ready to redeem or print), and a one-click jump into a new
   round for them. Expand **View Card** to validate their numbers and see their play history.
-  Rename or remove anyone.
+  Rename or remove anyone — if they still have an unredeemed reward, the confirmation dialog
+  says so before you commit (their round history stays in History either way, just off
+  Roster).
 - **History** — every completed round logged with who played, the balls drawn, and any
   prizes — plus a running total of RACCASH awarded and how much is still unredeemed.
 - **Backup** — export all data as JSON (full backup) or a CSV of winners (including
-  redemption status) for record-keeping, and re-import a JSON backup at any time.
+  redemption status) for record-keeping, and re-import a JSON backup at any time. Import
+  checks the file's shape before touching your data, so a corrupted or unrelated JSON file
+  fails with a clear message instead of silently breaking the app.
 
 ## Running it locally
 
@@ -152,7 +159,12 @@ copy outside the browser.
 - The certificate's bill graphics (`assets/rac-cash-25/50/75/100/200.png`) are cropped
   directly from your approved RACCASH print templates — not redrawn. Every possible round
   total ($25, $75, $100, $200) has an exact matching bill, so the certificate always shows a
-  single real bill (no combining graphics together).
+  single real bill (no combining graphics together). If a bill image ever fails to load
+  (renamed/missing file), the certificate shows a clear red warning in its place instead of
+  a silent broken-image icon.
+- The certificate is scaled to fit one US Letter page at normal print margins — its natural
+  (unscaled) height runs taller than a printable page, so `@media print` applies a fixed
+  0.75x scale just for printing; the on-screen layout is unaffected.
 - The printable card's 4x6 landscape page size is set via a named CSS page (`@page
   card-page`), which is well supported in Chrome/Edge. If you print from a browser that
   ignores it, just set the paper size to 4x6 (or "Index Card") manually in the print dialog.

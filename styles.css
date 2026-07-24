@@ -215,7 +215,11 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   border-bottom: 1px solid var(--border);
 }
 .search-result-row:last-child { border-bottom: none; }
-.search-result-row:hover { background: rgba(255, 183, 3, 0.12); }
+.search-result-row:hover, .search-result-row:focus-visible {
+  background: rgba(255, 183, 3, 0.12);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
 .search-result-row.add-new { color: var(--accent); font-weight: 700; }
 .search-badge {
   font-size: 0.72rem;
@@ -541,6 +545,15 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
 @media print {
   body.printing-cert > *:not(#certificateArea) { display: none !important; }
   body.printing-cert #certificateArea { display: block !important; }
+  /* The certificate's natural height (~1186px) runs taller than a Letter
+     page's usable area at normal printer margins (~950-980px), which would
+     spill a sliver onto a second page. Scale it down for print only — the
+     on-screen/debug rendering (certificateArea forced visible) stays full
+     size, and print resolution means this reads fine at 80%. */
+  .certificate-page.cert-v2 {
+    transform: scale(0.75);
+    transform-origin: top center;
+  }
 }
 
 .certificate-page.cert-v2 {
@@ -587,6 +600,14 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   justify-content: center;
 }
 .cert-bill-img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18); }
+.cert-bill-missing {
+  border: 2px dashed #c8102e;
+  border-radius: 8px;
+  padding: 18px;
+  color: #c8102e;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
 
 .cert-medal {
   position: absolute;
@@ -984,5 +1005,7 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   .call-row { flex-direction: column; align-items: stretch; }
   .game-top { flex-direction: column; }
   .win-modal-card { padding: 28px 22px; }
-  .cert-verify { flex-direction: column; }
+  .cert-totals-row { flex-direction: column; }
+  .cert-footer-row { flex-direction: column; gap: 14px; }
+  .cert-verify-block { flex-direction: row; flex-wrap: wrap; }
 }

@@ -240,6 +240,15 @@
     return n;
   }
 
+  // Real bingo cards never repeat a number anywhere on the card — catches a
+  // likely data-entry mistake instead of silently accepting it.
+  function cardHasDuplicate(customer, num, excludeCol, excludeRow) {
+    return COLUMNS.some(col => customer.card[col].some((v, r) => {
+      if (col === excludeCol && r === excludeRow) return false;
+      return v === num;
+    }));
+  }
+
   function playedThisWeek(customer) {
     return !!customer.lastPlayedAt && (Date.now() - customer.lastPlayedAt) < WEEK_MS;
   }
@@ -588,6 +597,11 @@
             input.value = value === null ? "" : value;
             return;
           }
+          if (cardHasDuplicate(customer, n, col, row)) {
+            alert(`${n} is already entered elsewhere on this card — each number can only appear once.`);
+            input.value = value === null ? "" : value;
+            return;
+          }
           setCardCell(customer.id, col, row, n);
           render();
         });
@@ -663,6 +677,21 @@
     return list.slice(0, 8);
   }
 
+  // The search-result rows are plain divs (for the "played this week" badge
+  // layout), so make them keyboard-operable like a real button: reachable by
+  // Tab, activatable with Enter or Space.
+  function makeRowActivatable(row, handler) {
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.addEventListener("click", handler);
+    row.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handler();
+      }
+    });
+  }
+
   function renderSearchResults() {
     const input = document.getElementById("customerSearchInput");
     const results = document.getElementById("customerSearchResults");
@@ -682,7 +711,7 @@
         badge.textContent = "Played this week";
         row.appendChild(badge);
       }
-      row.addEventListener("click", () => {
+      makeRowActivatable(row, () => {
         selectedCustomerId = c.id;
         input.value = "";
         results.hidden = true;
@@ -697,7 +726,7 @@
       const addRow = document.createElement("div");
       addRow.className = "search-result-row add-new";
       addRow.textContent = `+ Add "${trimmed}" as new customer`;
-      addRow.addEventListener("click", () => {
+      makeRowActivatable(addRow, () => {
         const customer = addCustomer(trimmed);
         selectedCustomerId = customer.id;
         input.value = "";
@@ -729,7 +758,11 @@
       });
 
       node.querySelector(".btn-remove").addEventListener("click", () => {
-        if (confirm(`Remove ${customer.name} from the roster? This cannot be undone.`)) {
+        const pendingTotal = roundTotal(pendingRewardsFor(customer.id).flatMap(r => r.wins));
+        const warning = pendingTotal
+          ? ` They still have $${pendingTotal} in unredeemed RACCASH pending — their round history stays in History, but they'll disappear from Roster.`
+          : "";
+        if (confirm(`Remove ${customer.name} from the roster? This cannot be undone.${warning}`)) {
           removeCustomer(customer.id);
           render();
         }
@@ -1197,6 +1230,15 @@
     document.getElementById("certTitleLine").textContent = info.headline;
     document.getElementById("certAwardedDate").textContent = new Date(latestTimestamp).toLocaleDateString();
     document.getElementById("certBills").innerHTML = billsHTML(info.bills);
+    // A missing/renamed bill asset would otherwise print as a silent broken-
+    // image icon — replace it with a visible warning so staff catch it
+    // before handing over an incomplete certificate.
+    document.querySelectorAll("#certBills .cert-bill-img").forEach(img => {
+      img.addEventListener("error", () => {
+        const amount = img.alt.match(/\$\d+/);
+        img.outerHTML = `<div class="cert-bill-missing">⚠ RAC CASH ${amount ? amount[0] : ""} bill graphic could not be loaded — do not redeem until this is fixed.</div>`;
+      }, { once: true });
+    });
     document.getElementById("certMedal").hidden = !info.isGrand;
     document.getElementById("certBreakdown").innerHTML = certBreakdownHTML(wins, info.total);
     document.getElementById("certTotalAmount").textContent = `$${info.total}`;
@@ -1386,14 +1428,33 @@
     URL.revokeObjectURL(url);
   }
 
+  // Checks just enough shape to keep a malformed/foreign JSON file from
+  // silently corrupting state and breaking rendering later — not a full
+  // schema validator, just enough to fail loudly at import time instead of
+  // crashing the app on the next render.
+  function validateBackupShape(parsed) {
+    if (!Array.isArray(parsed.customers) || !Array.isArray(parsed.history)) {
+      throw new Error("File does not look like a RACBINGO backup.");
+    }
+    parsed.customers.forEach(c => {
+      if (typeof c.id !== "string" || typeof c.name !== "string" || !c.card) {
+        throw new Error("Backup contains an invalid customer record.");
+      }
+    });
+    parsed.history.forEach(r => {
+      if (typeof r.id !== "string" || typeof r.customerId !== "string" ||
+          !Array.isArray(r.wins) || !Array.isArray(r.draws)) {
+        throw new Error("Backup contains an invalid round record.");
+      }
+    });
+  }
+
   function importJson(file) {
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const parsed = JSON.parse(reader.result);
-        if (!parsed.customers || !parsed.history) {
-          throw new Error("File does not look like a RACBINGO backup.");
-        }
+        validateBackupShape(parsed);
         if (!confirm("Importing will replace all current data. Continue?")) return;
         state = parsed;
         if (state.currentRound === undefined) state.currentRound = null;
