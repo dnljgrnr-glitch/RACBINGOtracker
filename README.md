@@ -63,12 +63,12 @@ handles more than one trusted machine.
 - **Prizes**, checked live after every ball — each tier pays out **once per round**:
   - **Line** (any row, column, or diagonal) = **$25 RACCASH** — the first line completed
     wins this once; finishing more lines afterward doesn't add another $25.
-  - **Four Corners** = **$50 RACCASH** — independent of Line; a customer can hit Four
+  - **Four Corners** = **$75 RACCASH** — independent of Line; a customer can hit Four
     Corners before ever completing a line, and both still pay out separately.
   - **Full BINGO** (blackout) = **$100 RACCASH** — a fully-covered card always contains
     complete lines and all four corners too, so reaching Blackout guarantees all three
     tiers are present.
-  - Max payout per round is $175 ($25 + $50 + $100).
+  - Max payout per round is $200 ($25 + $75 + $100).
 - **Win celebration** — the instant a customer hits a tier, fireworks play and a popup names
   the win and payout, with buttons to print a certificate and to **Continue Playing** — the
   round keeps going with every ball and all progress intact, so a customer can keep drawing
@@ -78,14 +78,17 @@ handles more than one trusted machine.
   "Row 3, Four Corners — $100 total") with one "Confirm Redemption & New Card" button — it
   checks the whole round off with today's date logged, and jumps straight to starting their
   next round. A customer can redeem at any point, not just after reaching Blackout.
-- **Printable certificate** — available from the win popup or anytime later from History,
-  and always reflects the round's current running total (not just the tier that was just
-  hit). Shows the real, approved RACCASH bill graphic for that exact amount — never a
-  redrawn or edited version. $25, $50, $75, and $100 each have their own real bill; the one
-  total with no matching bill ($175, a full Blackout) shows the three real bills that make
-  it up ($25 + $50 + $100) inside a gold "GRAND PRIZE" frame, with a breakdown table
-  underneath. Printing uses your browser's normal print dialog (Ctrl/Cmd+P equivalent,
-  triggered automatically).
+- **Printable certificate** — available from the win popup, from History, or by clicking any
+  pending reward pill on a customer's Roster entry (jumps to the matching round in History,
+  highlighted, with Redeem/Print right there). Uses the official "RAC BINGO REWARDS"
+  certificate template, and always reflects the round's current running total (not just the
+  tier that was just hit). Shows the real, approved RACCASH bill graphic for that exact
+  amount — never a redrawn or edited version. Every possible round total ($25 Line, $75 Four
+  Corners, $100 Line + Corners or Blackout alone, $200 full Blackout) has its own exact real
+  bill, so a single bill always appears — a full Blackout additionally shows a gold "GRAND
+  PRIZE" medal over the bill — plus a breakdown table of all three tiers (showing $0 for any
+  not won) and the running total. Printing uses your browser's normal print dialog (Ctrl/Cmd+P
+  equivalent, triggered automatically).
 - **Fixing mistakes** — every round in History can be edited at any time via "Edit Round":
   reassign it to a different customer (for a wrong-name pull), add or remove individual
   drawn balls (for an invalid entry), or delete the round outright. Wins are automatically
@@ -103,9 +106,10 @@ handles more than one trusted machine.
 - **Customer search** — fast typeahead search across your whole roster, or add someone new
   on the fly, right from the Play Round tab.
 - **Roster** — every customer with their card-entry status, last-played date (with a "this
-  week" flag), any pending unredeemed rewards, and a one-click jump into a new round for
-  them. Expand **View Card** to validate their numbers and see their play history. Rename or
-  remove anyone.
+  week" flag), a clickable pill for each pending unredeemed reward (jumps straight to that
+  round in History, highlighted, ready to redeem or print), and a one-click jump into a new
+  round for them. Expand **View Card** to validate their numbers and see their play history.
+  Rename or remove anyone.
 - **History** — every completed round logged with who played, the balls drawn, and any
   prizes — plus a running total of RACCASH awarded and how much is still unredeemed.
 - **Backup** — export all data as JSON (full backup) or a CSV of winners (including
@@ -146,14 +150,17 @@ copy outside the browser.
 - "Played this week" is a rolling 7 days from their last round's start time, not a calendar
   week — adjust in `app.js` (`WEEK_MS`) if you'd rather it reset on a fixed day.
 - The certificate's bill graphics (`assets/rac-cash-25/50/75/100/200.png`) are cropped
-  directly from your approved RACCASH print templates — not redrawn. $200 is cropped and
-  available but currently unused, since no prize total needs it.
+  directly from your approved RACCASH print templates — not redrawn. Every possible round
+  total ($25, $75, $100, $200) has an exact matching bill, so the certificate always shows a
+  single real bill (no combining graphics together).
 - The printable card's 4x6 landscape page size is set via a named CSS page (`@page
   card-page`), which is well supported in Chrome/Edge. If you print from a browser that
   ignores it, just set the paper size to 4x6 (or "Index Card") manually in the print dialog.
-- The card's back lists the real, current prize tiers ($25/$50/$100) rather than a flat
-  amount, and its store address/phone are hardcoded in `app.js` (`STORE_ADDRESS`,
-  `STORE_PHONE`) — update those if the store location changes.
+- The card's back lists the real, current prize tiers ($25/$75/$100) rather than a flat
+  amount, and its store address/phone/number are hardcoded in `app.js` (`STORE_ADDRESS`,
+  `STORE_PHONE`, `STORE_NUMBER`) — update those if the store location changes. `STORE_NUMBER`
+  is currently set to `"650"`, inferred from the staff login username — confirm this is
+  correct for your store.
 - Card ID on the printed card is generated from the customer's internal ID plus the issue
   date (e.g. `RB-F8QZ5V-072126`) — it's for matching a physical card back to its digital
   record, not a security feature.

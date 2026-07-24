@@ -367,17 +367,21 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
 .card-status.complete { color: var(--hit); }
 .last-played { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 8px; }
 .last-played.recent { color: var(--danger); font-weight: 700; }
-.reward-badge {
-  display: inline-block;
+.reward-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.reward-item {
+  display: block;
+  width: 100%;
+  text-align: left;
   font-size: 0.75rem;
   font-weight: 700;
   color: #201800;
   background: var(--win);
-  padding: 3px 8px;
-  border-radius: 999px;
-  margin-bottom: 8px;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
 }
-.reward-badge[hidden] { display: none; }
+.reward-item:hover { background: var(--accent); }
 .play-btn { width: 100%; }
 
 .view-card-btn { width: 100%; margin-top: 8px; }
@@ -444,6 +448,11 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   border-radius: var(--radius);
   padding: 14px 16px;
   margin-bottom: 12px;
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+.history-item-highlight {
+  border-color: var(--win);
+  box-shadow: 0 0 0 3px rgba(255, 214, 10, 0.35);
 }
 .history-item h4 { margin: 0; }
 .history-item .meta-line { color: var(--text-dim); font-size: 0.9rem; margin: 6px 0 8px; }
@@ -534,94 +543,127 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   body.printing-cert #certificateArea { display: block !important; }
 }
 
-.certificate-page {
+.certificate-page.cert-v2 {
   max-width: 720px;
   margin: 0 auto;
-  padding: 40px;
+  padding: 26px 32px 30px;
   text-align: center;
-  color: #1a1300;
+  color: #0a1e42;
   background: #fff;
+  border: 8px solid #0a1e42;
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 3px #c9a227;
 }
-.cert-header .cert-emoji { font-size: 1.8rem; margin-bottom: 6px; }
-.cert-header h1 { margin: 0 0 6px; font-size: 1.9rem; }
-.cert-header p { margin: 0 0 24px; font-size: 1.1rem; color: #444; }
 
-.cert-bills {
+.cert-star { color: #c9a227; }
+
+.cert-topline { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 4px; }
+.cert-topline .cert-star { font-size: 1rem; }
+.cert-topline::before, .cert-topline::after {
+  content: "";
+  flex: 1;
+  max-width: 140px;
+  height: 2px;
+  background: #c9a227;
+}
+.cert-rac-script { font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 700; color: #c8102e; font-size: 1.3rem; }
+.cert-rac-script sup { font-size: 0.6rem; }
+
+.cert-v2-title { margin: 6px 0 18px; font-size: 2.5rem; font-weight: 900; letter-spacing: 1px; line-height: 1; }
+.cert-title-rac { color: #c8102e; }
+.cert-title-navy { color: #0a1e42; }
+.cert-v2-title .cert-star { font-size: 1.5rem; }
+
+.cert-bill-frame {
   position: relative;
+  border: 2px solid #c9a227;
+  border-radius: 14px;
+  padding: 22px;
   margin: 0 auto 20px;
   max-width: 560px;
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cert-bill-img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18); }
+
+.cert-medal {
+  position: absolute;
+  right: -16px;
+  bottom: -28px;
+  width: 120px;
+  text-align: center;
+}
+.cert-medal-seal {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f5d576, #c9a227 60%, #a9820f 100%);
+  border: 3px solid #8a6c0c;
+  color: #0a1e42;
+  font-weight: 900;
+  font-size: 0.8rem;
+  line-height: 1.15;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
-.cert-bill-img {
-  width: 100%;
-  display: block;
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-}
-.cert-bills-grand {
-  padding-top: 22px;
-  border: 3px solid #d4a017;
-  border-radius: 10px;
-  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.35);
-  padding: 22px 10px 10px;
-}
-.cert-grand-badge {
-  position: absolute;
-  top: -14px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #d4a017;
-  color: #1a1300;
-  font-weight: 900;
-  font-size: 0.85rem;
-  letter-spacing: 1px;
-  padding: 4px 16px;
-  border-radius: 999px;
-  white-space: nowrap;
+.cert-medal-seal .cert-star { display: block; font-size: 0.85rem; }
+.cert-medal-ribbon {
+  width: 64px;
+  height: 42px;
+  margin: -6px auto 0;
+  background: #0a1e42;
+  clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%);
 }
 
-.cert-breakdown {
-  max-width: 400px;
-  margin: 0 auto 20px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  overflow: hidden;
-}
+.cert-congrats { margin: 8px 0 2px; font-size: 1.6rem; font-weight: 900; color: #0a1e42; }
+.cert-star-divider { color: #c9a227; font-size: 0.9rem; margin: 8px 0; }
+.cert-title-line { margin: 2px 0; font-size: 1.25rem; font-weight: 900; color: #c8102e; }
+.cert-awarded { margin: 0 0 18px; font-size: 0.9rem; color: #555; }
+
+.cert-totals-row { display: flex; gap: 14px; align-items: stretch; margin: 0 0 18px; }
+.cert-breakdown-table { flex: 1; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; text-align: left; }
 .cert-breakdown-row {
   display: flex;
   justify-content: space-between;
   padding: 8px 14px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: #333;
   border-bottom: 1px solid #e5e5e0;
 }
 .cert-breakdown-row:last-child { border-bottom: none; }
-.cert-breakdown-total {
-  background: #f4f3ee;
-  font-weight: 900;
-  color: #1a1300;
-}
+.cert-breakdown-row.cert-breakdown-total { background: #f4f3ee; font-weight: 900; color: #c8102e; }
 
-.cert-instructions { color: #444; font-size: 0.95rem; margin: 0 0 20px; }
-.cert-thankyou {
-  border-top: 1px solid #ccc;
-  padding-top: 18px;
-  margin-top: 10px;
-  font-size: 0.95rem;
-  color: #333;
-  line-height: 1.6;
-  text-align: left;
-}
-.cert-verify {
+.cert-total-badge {
+  flex-shrink: 0;
+  width: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #c9a227;
   display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  margin-top: 30px;
-  font-size: 0.85rem;
-  color: #555;
+  flex-direction: column;
 }
+.cert-total-label { background: #0a1e42; color: #fff; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.5px; padding: 10px 8px; flex: 1; display: flex; align-items: center; justify-content: center; }
+.cert-total-amount { background: #c8102e; color: #fff; font-size: 1.4rem; font-weight: 900; padding: 8px; }
+
+.cert-instructions { margin: 0 0 4px; font-size: 0.92rem; color: #0a1e42; font-weight: 700; }
+.cert-legal-note { margin: 0 0 14px; font-size: 0.78rem; font-style: italic; color: #666; }
+
+.cert-footer-row { display: flex; gap: 20px; text-align: left; margin: 14px 0; }
+.cert-thankyou-block { flex: 2; display: flex; gap: 10px; align-items: flex-start; }
+.cert-heart-icon { font-size: 1.6rem; flex-shrink: 0; }
+.cert-thankyou-block #certThankYou { font-size: 0.84rem; color: #333; line-height: 1.5; }
+.cert-verify-block { flex: 1; display: flex; flex-direction: column; gap: 10px; font-size: 0.8rem; color: #333; }
+
+.cert-store-footer { margin-top: 16px; text-align: center; }
+.cert-store-name { color: #c8102e; font-weight: 900; font-size: 1.15rem; margin-bottom: 4px; }
+.cert-store-footer > div { font-size: 0.85rem; color: #333; margin-bottom: 2px; }
+.cert-fineprint { font-size: 0.66rem; color: #777; margin-top: 10px; line-height: 1.4; }
 
 /* Printable bingo card (4x6 index card, landscape) */
 .card-print-area { display: none; }

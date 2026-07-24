@@ -7,7 +7,7 @@
   const FREE = "FREE";
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-  const PRIZES = { LINE: 25, CORNERS: 50, BLACKOUT: 100 };
+  const PRIZES = { LINE: 25, CORNERS: 75, BLACKOUT: 100 };
   const TIER_KEYS = ["LINE", "CORNERS", "BLACKOUT"];
 
   // ---------- Authentication (local-only lock screen) ----------
@@ -78,14 +78,14 @@
   // customer has accumulated so far (they can redeem at any point). Reaching
   // Blackout always implies Line + Corners were also won (a fully-covered
   // card necessarily contains complete lines and all four corners), so the
-  // $175 "grand" case ($25 + $50 + $100) is the only way all three ever
+  // $200 "grand" case ($25 + $75 + $100) is the only way all three ever
   // appear together.
   // Real RACCASH bill graphics only exist for $25/$50/$75/$100/$200 (cropped
-  // from the approved templates — see assets/rac-cash-*.png). When a round's
-  // total matches one exactly, show that single bill. The only total that
-  // never has an exact bill is $175 (Line + Corners + Blackout) — for that
-  // case, show one real bill per tier won ($25 + $50 + $100) rather than
-  // ever editing the artwork itself.
+  // from the approved templates — see assets/rac-cash-*.png). Every possible
+  // round total ($25 Line, $75 Corners, $100 Line+Corners, $200 grand) has
+  // an exact matching bill, so a single real bill is always shown — the
+  // multi-bill fallback below only exists as a safety net in case the prize
+  // amounts ever change again and stop lining up with real denominations.
   const BILL_DENOMINATIONS = [25, 50, 75, 100, 200];
 
   function billsFor(wins, total) {
@@ -128,8 +128,9 @@
           }, null);
         }
       });
-      // Migrate older data recorded when Four Corners incorrectly paid $75
-      // instead of $50 — corrects both past rounds and an in-progress one.
+      // Normalizes any Four Corners win to the current PRIZES.CORNERS value —
+      // covers the brief period this was mis-set to $50 instead of $75, and
+      // self-corrects in either direction if the amount is ever changed again.
       const fixCornersPrize = wins => {
         (wins || []).forEach(w => {
           if (w.pattern === "Four Corners" && w.prize !== PRIZES.CORNERS) w.prize = PRIZES.CORNERS;
@@ -476,6 +477,19 @@
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === `tab-${name}`));
   }
 
+  // Jumps to History and scrolls/highlights one specific round — used by the
+  // roster's clickable pending-reward list so staff land directly on the
+  // right certificate/redeem controls instead of hunting through History.
+  function goToRoundInHistory(roundId) {
+    switchTab("history");
+    render();
+    const el = document.getElementById(`history-round-${roundId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("history-item-highlight");
+    setTimeout(() => el.classList.remove("history-item-highlight"), 2500);
+  }
+
   // ---------- Rendering ----------
 
   function render() {
@@ -736,11 +750,16 @@
       }
 
       const pending = pendingRewardsFor(customer.id);
-      const badge = node.querySelector(".reward-badge");
-      if (pending.length) {
-        badge.hidden = false;
-        badge.textContent = `🎁 ${pending.length} pending reward${pending.length === 1 ? "" : "s"}`;
-      }
+      const rewardList = node.querySelector(".reward-list");
+      pending.forEach(round => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "reward-item";
+        const total = roundTotal(round.wins);
+        btn.textContent = `🎁 $${total} — ${round.wins.map(w => w.label).join(", ")} — ${formatDate(round.startedAt)}`;
+        btn.addEventListener("click", () => goToRoundInHistory(round.id));
+        rewardList.appendChild(btn);
+      });
 
       node.querySelector(".play-btn").addEventListener("click", () => {
         selectedCustomerId = customer.id;
@@ -848,6 +867,7 @@
     state.history.forEach(round => {
       const item = document.createElement("div");
       item.className = "history-item";
+      item.id = `history-round-${round.id}`;
 
       const headerRow = document.createElement("div");
       headerRow.className = "history-item-header";
@@ -899,7 +919,7 @@
         printBtn.type = "button";
         printBtn.className = "btn btn-ghost btn-sm";
         printBtn.textContent = "Print Certificate 🖨";
-        printBtn.addEventListener("click", () => printCertificate(round.customerName, round.wins));
+        printBtn.addEventListener("click", () => printCertificate(round.customerName, round.wins, round.id));
         actions.appendChild(printBtn);
 
         if (round.redeemed) {
@@ -1107,42 +1127,42 @@
 
   // ---------- Printable certificate ----------
 
+  const STORE_NUMBER = "650"; // inferred from the "650Goats" login / RAC650 naming — update if wrong
+  const STORE_ADDRESS = "437 Hepburn St., Williamsport, PA 17701";
+  const STORE_PHONE = "(570) 322-4900";
+
   // Renders the exact approved RACCASH bill graphic(s) for this certificate
-  // — never a redrawn or edited version. One image when the total matches a
-  // real denomination; multiple stacked bills (summing to the total) when it
-  // doesn't (only the $175 grand case).
-  function billsHTML(bills, isGrand) {
-    const imgs = bills.map(b =>
+  // — never a redrawn or edited version. Every possible round total has an
+  // exact matching bill (see BILL_DENOMINATIONS), so this is normally just
+  // one image; the array only ever holds more than one if prize amounts
+  // change again and stop lining up with real denominations.
+  function billsHTML(bills) {
+    return bills.map(b =>
       `<img src="assets/rac-cash-${b}.png" alt="RAC CASH $${b}" class="cert-bill-img">`
     ).join("");
-    return `
-      <div class="cert-bills${isGrand ? " cert-bills-grand" : ""}">
-        ${isGrand ? '<div class="cert-grand-badge">★ GRAND PRIZE ★</div>' : ""}
-        ${imgs}
-      </div>`;
   }
 
-  // Only shown when a certificate covers more than one tier, to make the
-  // total transparent (e.g. a $175 grand certificate = $25 + $50 + $100).
-  function certBreakdownHTML(breakdown, total) {
-    if (breakdown.length <= 1) return "";
-    const rows = breakdown.map(w =>
-      `<div class="cert-breakdown-row"><span>${escapeHtml(w.label)}</span><span>$${w.prize}</span></div>`
-    ).join("");
-    return `
-      <div class="cert-breakdown">
-        ${rows}
-        <div class="cert-breakdown-row cert-breakdown-total"><span>TOTAL</span><span>$${total}</span></div>
-      </div>`;
+  // Always three fixed rows (matching the official certificate template),
+  // showing $0 for any tier not won this round, plus a total row.
+  function certBreakdownHTML(wins, total) {
+    const amountFor = key => {
+      const win = wins.find(w => tierKeyFor(w.pattern) === key);
+      return win ? win.prize : 0;
+    };
+    const rows = [
+      ["ROW 1", amountFor("LINE")],
+      ["FOUR CORNERS", amountFor("CORNERS")],
+      ["FULL BINGO", amountFor("BLACKOUT")]
+    ].map(([label, amt]) => `<div class="cert-breakdown-row"><span>${label}</span><span>$${amt}</span></div>`).join("");
+    return `${rows}<div class="cert-breakdown-row cert-breakdown-total"><span>TOTAL RAC CASH</span><span>$${total}</span></div>`;
   }
 
   function thankYouMessage(customerName) {
     return `Dear ${escapeHtml(customerName)},<br><br>
-      From all of us on the team here at Rent-A-Center — thank you! Nights like our RACBINGO
-      drawings are only as good as the customers who show up and play, and we're grateful
-      you're one of them. Your continued loyalty and support are what make our store feel like
-      a community, not just a business.<br><br>
-      We hope you enjoy your reward, and we can't wait to see you at the next drawing.<br><br>
+      From all of us at Rent-A-Center, thank you for playing RAC Bingo. Our drawings are only
+      possible because customers like you continue to visit, participate, and support our
+      store. We hope you enjoy your reward, and we look forward to seeing you at your next
+      drawing.<br><br>
       With appreciation,<br>
       Your Rent-A-Center Team`;
   }
@@ -1153,28 +1173,43 @@
     return div.innerHTML;
   }
 
+  // A short, stable code printed on the certificate for matching a physical
+  // printout back to its record — not a security feature, just a reference
+  // number. Deterministic from certKey (a round id, or a customer+timestamp
+  // fallback for a still-live round), so reprinting the same win always
+  // shows the same ID.
+  function certificateIdFor(certKey) {
+    const str = String(certKey);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    return "RB-" + hash.toString(36).toUpperCase().padStart(6, "0").slice(-6);
+  }
+
   // A round has exactly one certificate, reflecting everything the customer
   // has won so far this round — not one certificate per tier. Reaching
   // Blackout means all three tiers are present, so this naturally becomes
-  // the $175 grand certificate at that point.
-  function printCertificate(customerName, wins) {
+  // the $200 grand certificate at that point.
+  function printCertificate(customerName, wins, certKey) {
     if (!wins || wins.length === 0) return;
     const info = certificateInfo(wins);
     const latestTimestamp = Math.max(...wins.map(w => w.timestamp));
     document.getElementById("certName").textContent = customerName;
-    document.getElementById("certSubline").textContent =
-      `${info.headline} — ${new Date(latestTimestamp).toLocaleDateString()}`;
-    document.getElementById("certBills").innerHTML = billsHTML(info.bills, info.isGrand);
-    document.getElementById("certBreakdown").innerHTML = certBreakdownHTML(info.breakdown, info.total);
+    document.getElementById("certTitleLine").textContent = info.headline;
+    document.getElementById("certAwardedDate").textContent = new Date(latestTimestamp).toLocaleDateString();
+    document.getElementById("certBills").innerHTML = billsHTML(info.bills);
+    document.getElementById("certMedal").hidden = !info.isGrand;
+    document.getElementById("certBreakdown").innerHTML = certBreakdownHTML(wins, info.total);
+    document.getElementById("certTotalAmount").textContent = `$${info.total}`;
     document.getElementById("certThankYou").innerHTML = thankYouMessage(customerName);
+    document.getElementById("certId").textContent = certificateIdFor(certKey || `${customerName}-${latestTimestamp}`);
+    document.getElementById("certStoreNumber").textContent = STORE_NUMBER;
+    document.getElementById("certStoreAddress").textContent = STORE_ADDRESS;
+    document.getElementById("certStorePhone").textContent = STORE_PHONE;
     document.body.classList.add("printing-cert");
     window.print();
   }
 
   // ---------- Printable bingo card (front/back, 4x6 index card) ----------
-
-  const STORE_ADDRESS = "437 Hepburn St., Williamsport, PA 17701";
-  const STORE_PHONE = "(570) 322-4900";
 
   function cardIdFor(customer) {
     const code = customer.id.slice(-6).toUpperCase();
@@ -1461,10 +1496,10 @@
     // Print reflects everything won in the round so far, not just this one
     // milestone — fall back to the single win if the round somehow isn't
     // live anymore (e.g. it was already submitted).
-    const wins = (state.currentRound && state.currentRound.customerId)
-      ? state.currentRound.wins
-      : [activeModalWin];
-    printCertificate(activeModalWin.customerName, wins);
+    const isLive = state.currentRound && state.currentRound.customerId;
+    const wins = isLive ? state.currentRound.wins : [activeModalWin];
+    const certKey = isLive ? `${state.currentRound.customerId}-${state.currentRound.startedAt}` : null;
+    printCertificate(activeModalWin.customerName, wins, certKey);
   });
 
   document.getElementById("loginForm").addEventListener("submit", e => {
