@@ -537,6 +537,51 @@
     return new Date(ts).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   }
 
+  // Each round is its own fresh card/draws by design (see roundsFor), so once
+  // a round is submitted it's archived to History, not resumed. This just
+  // surfaces that most recent round as reference on the Play Round screen —
+  // otherwise it's only visible via Roster > View Card > Progression, which
+  // staff coming back to start someone's next round would never think to
+  // check first.
+  function renderLastRoundSummary(customer) {
+    const wrap = document.getElementById("lastRoundSummary");
+    const rounds = roundsFor(customer.id);
+    if (rounds.length === 0) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+    const last = rounds[0];
+
+    document.getElementById("lastRoundDate").textContent = formatDate(last.startedAt);
+    document.getElementById("lastRoundWinText").textContent = last.wins.length
+      ? `Won ${last.wins.map(w => w.label).join(", ")} — $${roundTotal(last.wins)}${last.redeemed ? " (redeemed)" : " (not yet redeemed)"}`
+      : "No win that round.";
+
+    const ballsWrap = document.getElementById("lastRoundBalls");
+    ballsWrap.innerHTML = "";
+    if (last.draws.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "ball-chip empty-slot";
+      empty.textContent = "–";
+      ballsWrap.appendChild(empty);
+    } else {
+      last.draws.forEach(num => {
+        const chip = document.createElement("div");
+        chip.className = "ball-chip";
+        chip.textContent = num;
+        ballsWrap.appendChild(chip);
+      });
+    }
+
+    const grid = document.getElementById("lastRoundGrid");
+    if (last.card) {
+      renderReadOnlyGrid(grid, { card: last.card }, new Set(last.draws));
+    } else {
+      grid.innerHTML = "";
+    }
+  }
+
   function renderCustomerPanel() {
     const customer = findCustomer(selectedCustomerId);
     document.getElementById("selectedCustomerName").textContent = customer.name;
@@ -549,6 +594,7 @@
       alertEl.hidden = true;
     }
 
+    renderLastRoundSummary(customer);
     renderCardEntryGrid(customer);
     const filled = cardFilledCount(customer);
     const statusEl = document.getElementById("cardEntryStatus");

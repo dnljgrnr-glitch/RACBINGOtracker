@@ -250,6 +250,17 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   margin: 10px 0;
 }
 
+.last-round-summary {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 10px 0 18px;
+}
+.last-round-meta { color: var(--win); font-weight: 600; margin: 0 0 12px; }
+.last-round-summary .drawn-balls { margin: 0 0 14px; }
+.last-round-summary .mini-grid-ro { margin-bottom: 0; }
+
 .card-entry-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .roster-card-actions { display: flex; gap: 8px; }
 .roster-card-actions .btn { flex: 1; }

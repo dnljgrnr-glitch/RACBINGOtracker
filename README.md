@@ -28,7 +28,12 @@ handles more than one trusted machine.
 
 - **Find or add a customer** — type a name in the search box on the Play Round tab. Existing
   customers show up as you type (with a "played this week" badge if relevant); if there's no
-  match, an "Add as new customer" option appears.
+  match, an "Add as new customer" option appears. Selecting a returning customer shows a
+  **Last Round Played** summary right there — the date, what they won (if anything), every
+  ball drawn that round, and their card marks from that round in the same grid layout as
+  their physical card — so staff isn't blind to their history when starting their next
+  round. Each week is still a fresh card and a fresh round by design (see below); this is
+  reference only, not a resumed game.
 - **Enter their card** — every customer needs a fresh set of 24 numbers entered each week
   (5 per column, center is always free) before a round can start. Click **Generate Random
   Card** to have the app deal a valid card automatically (5 unique numbers per column, drawn
