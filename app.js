@@ -639,12 +639,12 @@
             return;
           }
           if (!Number.isInteger(n) || n < min || n > max) {
-            alert(`${col} column must be ${min}-${max}.`);
+            showAlert(`${col} column must be ${min}-${max}.`);
             input.value = value === null ? "" : value;
             return;
           }
           if (cardHasDuplicate(customer, n, col, row)) {
-            alert(`${n} is already entered elsewhere on this card — each number can only appear once.`);
+            showAlert(`${n} is already entered elsewhere on this card — each number can only appear once.`);
             input.value = value === null ? "" : value;
             return;
           }
@@ -808,10 +808,10 @@
         const warning = pendingTotal
           ? ` They still have $${pendingTotal} in unredeemed RACCASH pending — their round history stays in History, but they'll disappear from Roster.`
           : "";
-        if (confirm(`Remove ${customer.name} from the roster? This cannot be undone.${warning}`)) {
+        showConfirm(`Remove ${customer.name} from the roster? This cannot be undone.${warning}`, () => {
           removeCustomer(customer.id);
           render();
-        }
+        });
       });
 
       const status = node.querySelector(".card-status");
@@ -1091,13 +1091,58 @@
     deleteBtn.className = "btn btn-danger-outline btn-sm round-delete-btn";
     deleteBtn.textContent = "Delete This Round";
     deleteBtn.addEventListener("click", () => {
-      if (confirm(`Permanently delete this round for ${round.customerName}? This cannot be undone.`)) {
+      showConfirm(`Permanently delete this round for ${round.customerName}? This cannot be undone.`, () => {
         deleteRound(round.id);
-      }
+      });
     });
     panel.appendChild(deleteBtn);
 
     return panel;
+  }
+
+  // ---------- Confirm / alert modal ----------
+  // Replaces window.confirm()/alert(): native dialogs can silently fail
+  // (browser dialog-suppression after repeated use, extensions, embedded
+  // contexts) and leave a click doing nothing with zero visible feedback —
+  // an in-page modal can't be suppressed that way.
+
+  function showConfirm(message, onConfirm) {
+    const overlay = document.getElementById("confirmModalOverlay");
+    const cancelBtn = document.getElementById("confirmModalCancelBtn");
+    const okBtn = document.getElementById("confirmModalOkBtn");
+    document.getElementById("confirmModalTitle").textContent = "Please Confirm";
+    document.getElementById("confirmModalMessage").textContent = message;
+    cancelBtn.hidden = false;
+    okBtn.textContent = "Confirm";
+
+    const cleanup = () => {
+      overlay.hidden = true;
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+    };
+    const onOk = () => { cleanup(); onConfirm(); };
+    const onCancel = () => cleanup();
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    overlay.hidden = false;
+  }
+
+  function showAlert(message) {
+    const overlay = document.getElementById("confirmModalOverlay");
+    const cancelBtn = document.getElementById("confirmModalCancelBtn");
+    const okBtn = document.getElementById("confirmModalOkBtn");
+    document.getElementById("confirmModalTitle").textContent = "Notice";
+    document.getElementById("confirmModalMessage").textContent = message;
+    cancelBtn.hidden = true;
+    okBtn.textContent = "OK";
+
+    const cleanup = () => {
+      overlay.hidden = true;
+      okBtn.removeEventListener("click", onOk);
+    };
+    const onOk = () => cleanup();
+    okBtn.addEventListener("click", onOk);
+    overlay.hidden = false;
   }
 
   // ---------- Win celebration ----------
@@ -1501,14 +1546,15 @@
       try {
         const parsed = JSON.parse(reader.result);
         validateBackupShape(parsed);
-        if (!confirm("Importing will replace all current data. Continue?")) return;
-        state = parsed;
-        if (state.currentRound === undefined) state.currentRound = null;
-        selectedCustomerId = null;
-        saveData();
-        render();
+        showConfirm("Importing will replace all current data. Continue?", () => {
+          state = parsed;
+          if (state.currentRound === undefined) state.currentRound = null;
+          selectedCustomerId = null;
+          saveData();
+          render();
+        });
       } catch (e) {
-        alert("Could not import file: " + e.message);
+        showAlert("Could not import file: " + e.message);
       }
     };
     reader.readAsText(file);
@@ -1548,10 +1594,16 @@
     if (!selectedCustomerId) return;
     const customer = findCustomer(selectedCustomerId);
     if (!customer) return;
-    if (cardFilledCount(customer) > 0 && !confirm("This will overwrite the current card numbers. Continue?")) return;
-    customer.card = generateRandomCard();
-    saveData();
-    render();
+    const doGenerate = () => {
+      customer.card = generateRandomCard();
+      saveData();
+      render();
+    };
+    if (cardFilledCount(customer) > 0) {
+      showConfirm("This will overwrite the current card numbers. Continue?", doGenerate);
+    } else {
+      doGenerate();
+    }
   });
 
   document.getElementById("printCardBtn").addEventListener("click", () => {
@@ -1576,17 +1628,17 @@
   });
 
   document.getElementById("endRoundBtn").addEventListener("click", () => {
-    if (confirm("Submit this round and move to the next customer?")) {
+    showConfirm("Submit this round and move to the next customer?", () => {
       endRound();
       render();
-    }
+    });
   });
 
   document.getElementById("cancelRoundBtn").addEventListener("click", () => {
-    if (confirm("Cancel this round without saving anything?")) {
+    showConfirm("Cancel this round without saving anything?", () => {
       cancelRound();
       render();
-    }
+    });
   });
 
   document.getElementById("exportJsonBtn").addEventListener("click", exportJson);

@@ -550,6 +550,20 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
 .win-modal-amount { font-size: 2.6rem; font-weight: 900; color: var(--accent); margin-bottom: 22px; }
 .win-modal-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 
+/* Reliable in-app confirm/alert modal — replaces window.confirm()/alert(),
+   which can silently fail (browser dialog-suppression, extensions, embedded
+   contexts) and leave a button click doing nothing with no visible feedback. */
+.confirm-modal-card {
+  border-color: var(--accent);
+  box-shadow: 0 0 40px rgba(255, 183, 3, 0.25);
+  max-width: 440px;
+  text-align: left;
+  animation: win-pop 0.2s ease-out;
+}
+.confirm-modal-card h2 { font-size: 1.25rem; color: var(--text); margin: 0 0 12px; letter-spacing: normal; }
+.confirm-modal-card p { font-size: 1rem; line-height: 1.5; margin: 0 0 24px; color: var(--text); white-space: pre-line; }
+.confirm-modal-card .win-modal-actions { justify-content: flex-end; }
+
 /* Printable certificate */
 .certificate-area { display: none; }
 
