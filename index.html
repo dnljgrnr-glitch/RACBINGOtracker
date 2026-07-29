@@ -62,16 +62,16 @@
       <p id="weeklyAlert" class="weekly-alert" hidden></p>
 
       <div id="lastRoundSummary" class="last-round-summary" hidden>
-        <h3 class="section-heading">Last Round Played</h3>
+        <h3 class="section-heading">Their Last Completed Game</h3>
         <p class="last-round-meta"><span id="lastRoundDate"></span> — <span id="lastRoundWinText"></span></p>
-        <p class="hint-text">Balls drawn that round:</p>
+        <p class="hint-text">Balls drawn that game:</p>
         <div class="drawn-balls" id="lastRoundBalls"></div>
-        <p class="hint-text">Their card marks from that round (green = hit):</p>
+        <p class="hint-text">Their card marks from that game (green = hit):</p>
         <div class="mini-grid-ro" id="lastRoundGrid"></div>
       </div>
 
-      <h3 class="section-heading">This Week's Card Numbers</h3>
-      <p class="hint-text">Generate a random valid card, or enter all 24 numbers from a physical card by hand (5 per column; the center is always free).</p>
+      <h3 class="section-heading">Set Up Their Card</h3>
+      <p class="hint-text">This is the one card they'll play on until they redeem or you close out their game — generate a random valid card, or enter all 24 numbers from a physical card by hand (5 per column; the center is always free).</p>
       <div class="card-entry-actions">
         <button type="button" id="generateCardBtn" class="btn btn-ghost">🎲 Generate Random Card</button>
         <button type="button" id="printCardBtn" class="btn btn-ghost" disabled>🖨 Print Card (Front/Back)</button>
@@ -79,18 +79,20 @@
       <div class="card-entry-grid" id="cardEntryGrid"></div>
       <p id="cardEntryStatus" class="card-entry-status"></p>
 
-      <button type="button" id="startRoundBtn" class="btn btn-primary btn-big" disabled>Start Round</button>
+      <button type="button" id="startRoundBtn" class="btn btn-primary btn-big" disabled>Start Game</button>
     </div>
 
     <div id="activeRound" class="panel-box active-round" hidden>
       <div class="game-top">
         <div>
           <h2 id="activeCustomerName" class="active-customer-name"></h2>
-          <div class="draw-progress" id="drawProgress">0 balls drawn</div>
+          <div class="draw-progress" id="drawProgress">0 balls drawn total</div>
+          <div class="week-status" id="weekStatus"></div>
         </div>
         <div class="game-top-actions">
-          <button type="button" id="cancelRoundBtn" class="btn btn-ghost">Cancel Round</button>
-          <button type="button" id="endRoundBtn" class="btn btn-danger-outline">Submit Round / Next Customer</button>
+          <button type="button" id="cancelRoundBtn" class="btn btn-ghost">Cancel</button>
+          <button type="button" id="finishVisitBtn" class="btn btn-primary">Done for Now / Next Customer</button>
+          <button type="button" id="closeOutGameBtn" class="btn btn-danger-outline">Close Out &amp; Start New Card</button>
         </div>
       </div>
 
@@ -102,7 +104,7 @@
           <button type="button" id="undoDrawBtn" class="btn btn-ghost">Undo Last Draw</button>
         </div>
         <p id="drawError" class="field-error" hidden></p>
-        <p class="hint-text">Pull as many balls as you want. Click any drawn ball below to remove that specific one, then click <strong>Submit Round</strong> when done.</p>
+        <p class="hint-text">Draws add to this card's running total — it carries over week to week until they redeem or you close it out. Click any drawn ball below to remove that specific one, then click <strong>Done for Now</strong> when finished for this visit.</p>
       </form>
 
       <div class="drawn-balls" id="drawnBalls"></div>
@@ -151,64 +153,68 @@
         <li>Click their name if they already exist, or click <strong>"+ Add ... as new customer"</strong> if they don't.</li>
       </ol>
 
-      <h2 class="help-title">Setting Up Their Card</h2>
+      <h2 class="help-title">How the Card Works</h2>
       <ol>
-        <li>Once a customer is selected, click <strong>Generate Random Card</strong> for an instant valid card, or type in all 24 numbers by hand from a physical card.</li>
-        <li>Click <strong>Print Card (Front/Back)</strong> to hand them a physical copy — print the front, flip the card over, then print the back.</li>
+        <li>Each customer plays on <strong>one ongoing card</strong> — it isn't reset every week. They keep drawing a few new balls each visit, week after week, progressing toward Line, Four Corners, and Full BINGO on that same card, until they redeem a win or you close out their card.</li>
+        <li>If a customer already has a card in progress, selecting them jumps straight into it — their full ball history and card marks are right there, picking up exactly where they left off.</li>
+        <li>If they don't have one yet (brand new, or their last game was just closed out), you'll land on the card setup screen instead.</li>
       </ol>
 
-      <h2 class="help-title">Starting and Playing a Round</h2>
+      <h2 class="help-title">Setting Up a New Card</h2>
       <ol>
-        <li>Once the card shows <strong>"Card ready ✓"</strong>, click <strong>Start Round</strong>.</li>
-        <li>As each ball is called from the machine, type the number and click <strong>Draw</strong> (or press Enter). There's no limit — keep drawing for as long as the customer wants to play, all the way to a full-card blackout if they get there.</li>
-        <li>If the same number gets pulled twice, the app rejects it and tells the customer to pull another ball — it's never a dead end, they just keep drawing until it's a new number.</li>
-        <li>Made a mistake? Click any drawn ball to remove just that one, or click <strong>Undo Last Draw</strong> for the most recent one.</li>
-        <li>Watch the <strong>Live Card Progress</strong> grid — matched numbers highlight green as you go, and the full draw history stays visible the entire time.</li>
+        <li>Click <strong>Generate Random Card</strong> for an instant valid card, or type in all 24 numbers by hand from a physical card.</li>
+        <li>Click <strong>Print Card (Front/Back)</strong> to hand them a physical copy — print the front, flip the card over, then print the back. This is the one card they'll keep using until they redeem or you close out their game.</li>
+        <li>Click <strong>Start Game</strong> once the card shows <strong>"Card ready ✓"</strong>.</li>
+      </ol>
+
+      <h2 class="help-title">Playing Each Weekly Visit</h2>
+      <ol>
+        <li>Customers are meant to draw a handful of new balls each week — about 5 is the usual pace, though there's no hard limit built in. As each ball is called from the machine, type the number and click <strong>Draw</strong> (or press Enter).</li>
+        <li>If the same number gets pulled twice for that customer — ever, not just this visit — the app rejects it and tells you to pull another ball.</li>
+        <li>Made a mistake this visit? Click any drawn ball to remove just that one, or click <strong>Undo Last Draw</strong> for the most recent one. This works on any ball in their history, not just today's.</li>
+        <li>Watch the <strong>Live Card Progress</strong> grid — matched numbers highlight green as you go, reflecting every ball ever drawn for that card, not just this visit.</li>
+        <li>Click <strong>Done for Now / Next Customer</strong> once you're finished drawing for this visit — everything's already saved, so this just clears the screen for the next person. Their card stays exactly as it is until they come back.</li>
       </ol>
 
       <h2 class="help-title">Wins and Celebrations</h2>
       <ol>
         <li>The app checks for a win after every ball — <strong>Line = $25</strong>, <strong>Four Corners = $75</strong>, <strong>Full BINGO = $100</strong>.</li>
-        <li>Each tier only pays out <strong>once per round</strong>. Once any single row, column, or diagonal completes, that's the one $25 Line prize — finishing more lines afterward doesn't add another. The next milestone up is Four Corners, then Full BINGO.</li>
-        <li>A win triggers fireworks and a popup, then <strong>Continue Playing ▶</strong> keeps the round going with all progress intact, so they can keep drawing toward the next milestone. A round is worth one certificate, not one per milestone — it always reflects their current running total, up to $200 ($25 + $75 + $100) if they reach a full Blackout.</li>
+        <li>Each tier only pays out <strong>once per card</strong>, no matter how many weeks it takes to get there. Once any single row, column, or diagonal completes, that's the one $25 Line prize — finishing more lines afterward doesn't add another. The next milestone up is Four Corners, then Full BINGO.</li>
+        <li>A win triggers fireworks and a popup, then <strong>Continue Playing ▶</strong> keeps things going with all progress intact. A card is worth one certificate, not one per milestone — it always reflects the running total earned so far, up to $200 ($25 + $75 + $100) if it reaches a full Blackout.</li>
       </ol>
 
-      <h2 class="help-title">Submitting or Canceling a Round</h2>
+      <h2 class="help-title">Redeeming or Closing Out a Game</h2>
       <ol>
-        <li>Click <strong>Submit Round / Next Customer</strong> once the customer is completely done playing — this saves every ball drawn and any wins, and frees up the machine for the next person.</li>
-        <li>Started a round by mistake — wrong customer, or just need to scrap it? Click <strong>Cancel Round</strong> instead — nothing gets saved, and their weekly play status is untouched.</li>
-      </ol>
-
-      <h2 class="help-title">Redeeming a Reward</h2>
-      <ol>
-        <li>Go to <strong>History</strong>. Every round with a win shows its total prize as one line — e.g. "Row 3, Four Corners — $100 total" — not a separate line per milestone.</li>
-        <li>Click <strong>Confirm Redemption &amp; New Card</strong> to log today's date against the round's full total and jump straight to starting their next round. A customer can redeem at any point — you don't need to wait for them to reach Blackout.</li>
-        <li>Click <strong>Print Certificate</strong> anytime, before or after redeeming, to hand over (or reprint) their certificate — it always shows the round's current total, and reaching Full BINGO turns it into a grand $200 certificate automatically.</li>
+        <li>Right from the Play Round screen, click <strong>Redeem $[amount] &amp; Start New Card</strong> (or <strong>Close Out &amp; Start New Card</strong> if nothing's been won) whenever the customer is ready to cash in or start fresh. This logs the game as done, resets their card for next time, and takes you straight into card setup for their new one.</li>
+        <li>A customer can redeem at any point — you don't need to wait for them to reach Blackout.</li>
+        <li>Click <strong>Print Certificate</strong> anytime, before or after redeeming, to hand over (or reprint) their certificate — it always shows the card's current total, and reaching Full BINGO turns it into a grand $200 certificate automatically.</li>
       </ol>
 
       <h2 class="help-title">Fixing Mistakes (Any Time)</h2>
       <ol>
-        <li>In <strong>History</strong>, click <strong>Edit Round</strong> on any past round to reassign it to the correct customer, add or remove drawn balls, or delete the round entirely.</li>
-        <li>Editing balls automatically rechecks whether the round should show a win, so prizes stay accurate.</li>
+        <li>For an <strong>in-progress</strong> card, click any drawn ball on the Play Round screen to remove it — that's the way to correct a mistake without closing out the whole game.</li>
+        <li>For a <strong>closed</strong> game, go to <strong>History</strong> and click <strong>Edit Round</strong> to reassign it to the correct customer, add or remove drawn balls, or delete it entirely.</li>
+        <li>Editing balls automatically rechecks whether it should show a win, so prizes stay accurate.</li>
         <li>Deleting a round cannot be undone — double-check before confirming.</li>
       </ol>
 
       <h2 class="help-title">Checking a Customer's Card</h2>
       <ol>
         <li>In <strong>Roster</strong>, click <strong>View Card</strong> on any customer to see their numbers in the real grid layout — handy for double-checking against their physical card.</li>
-        <li>Below the grid, <strong>Progression</strong> lists every round they've played, what was drawn, and what they won.</li>
+        <li>Below the grid, <strong>Progression</strong> lists their current in-progress game (if any) plus every past closed game, what was drawn, and what they won.</li>
+        <li>The Roster card itself shows an at-a-glance summary for anyone mid-game: which week they're on, total balls drawn, whether they've drawn this week yet, and a progress bar toward Blackout.</li>
       </ol>
 
-      <h2 class="help-title">Weekly Play Limit</h2>
+      <h2 class="help-title">Weekly Pacing</h2>
       <ol>
-        <li>Customers are meant to play once a week. If someone already played in the last 7 days, you'll see a warning banner when you select them.</li>
-        <li>It's a heads-up, not a hard stop — you can still start a round if there's a good reason to.</li>
+        <li>If someone already had balls drawn in the last 7 days, you'll see a note when you pull up their game. It's a heads-up, not a hard stop — you can still draw more if there's a good reason to.</li>
+        <li>There's no limit built into the app on how many balls get drawn in one visit — the ~5-per-week pace is a house guideline for staff to follow, not something the software enforces.</li>
       </ol>
 
       <h2 class="help-title">Backing Up Your Data</h2>
       <ol>
-        <li>In <strong>Roster</strong>, click <strong>Export Backup (JSON)</strong> regularly to save a full copy of everything outside the browser.</li>
-        <li><strong>Export Winners (CSV)</strong> gives a spreadsheet-friendly list of every win for record-keeping.</li>
+        <li>In <strong>Roster</strong>, click <strong>Export Backup (JSON)</strong> regularly to save a full copy of everything outside the browser — this is the only way to recover in-progress cards if something happens to this device.</li>
+        <li><strong>Export Winners (CSV)</strong> gives a spreadsheet-friendly list of every win for record-keeping, including customers still mid-game with an unredeemed running total.</li>
         <li><strong>Import Backup</strong> restores from a previous JSON export — this replaces all current data, so use it carefully.</li>
       </ol>
 
@@ -218,7 +224,7 @@
       <p class="hint-text">Quick lines for common moments — adjust to your own voice, but these hit the key points.</p>
 
       <p class="script-label">Introducing the game to someone who hasn't played</p>
-      <blockquote class="script-quote">"Hey [Name], have you played RACBINGO yet? It's free, it takes two minutes, and every week you're with us you get another shot at winning real RAC Cash — no purchase required. Want to play a round right now?"</blockquote>
+      <blockquote class="script-quote">"Hey [Name], have you played RACBINGO yet? It's free, it takes two minutes, and every week you're with us you get a few more shots at winning real RAC Cash on the same card — no purchase required. Want to get your card started right now?"</blockquote>
 
       <p class="script-label">Announcing a win</p>
       <blockquote class="script-quote">"Hold on — that's a BINGO! 🎉 You just won $[amount] in RAC Cash. I'm printing your certificate right now, so hang onto it and we'll get you set up whenever you're ready to use it."</blockquote>
@@ -227,29 +233,26 @@
       <blockquote class="script-quote">"Since you're already playing, did you know if you put [X] down on an agreement today, you get [Y] bonus RACBINGO draws before you even leave? That's [Y]x the chances to walk out with RAC Cash."</blockquote>
 
       <p class="script-label">Sending them off for the week</p>
-      <blockquote class="script-quote">"You're all set for this week! Every visit gets you a brand new card, so come back next [day] for another round — see you then!"</blockquote>
+      <blockquote class="script-quote">"You're all set for this week! Same card keeps building next time you're in — come back next [day] and we'll pull a few more balls for you."</blockquote>
 
       <h2 class="help-title">Pro Tips: Promoting With RACBINGO</h2>
       <p class="hint-text">RACBINGO works best as a visible, talked-about reason to come back and to put more down. Example tiered structure:</p>
       <ol>
-        <li><strong>Standard weekly visit</strong> — a normal round.</li>
-        <li><strong>Start or renew an agreement with 2 weeks paid down</strong> — 2x the draws in their round.</li>
+        <li><strong>Standard weekly visit</strong> — the usual handful of draws.</li>
+        <li><strong>Start or renew an agreement with 2 weeks paid down</strong> — 2x the draws this visit.</li>
         <li><strong>Pay a full month down</strong> — 3x the draws <strong>+ 1 BONUS draw</strong> on top.</li>
       </ol>
       <p class="hint-text">Treat these numbers as a starting example, not a fixed rule — set whatever tiers make sense for your store's current promotion, and post them somewhere customers can see.</p>
 
       <p class="script-label">Running bonus draws in the app</p>
-      <p>Since a round has no limit on balls, bonus draws are simple: just keep pulling balls for the customer, right through their standard amount and into their earned bonus balls, all in the same round. Click <strong>Submit Round / Next Customer</strong> only once you're completely done with all of it — everything gets saved together.</p>
-
-      <p class="script-label">About the weekly alert</p>
-      <p>Since bonus balls happen inside the same round now, the "already played this week" warning only checks once, when you start the round — it won't interrupt you repeatedly while you draw their bonus balls.</p>
+      <p>Bonus draws are simple: just keep pulling balls for the customer, right through their standard visit amount and into their earned bonus balls — there's no limit on how many go into one visit. Click <strong>Done for Now / Next Customer</strong> once you're completely done for the day.</p>
 
       <ol>
         <li>Celebrate wins loudly — the fireworks and popup are made for the moment. Let nearby customers see it happen.</li>
         <li>Post the current bonus-draw tiers near the register or play area so customers ask about them on their own.</li>
         <li>Run limited-time pushes (e.g. "Double Draw Weekend") to create urgency around paying more down.</li>
         <li>Hand out the printed card's back (rules + store info) as a takeaway reminder to come back next week.</li>
-        <li>Check <strong>Roster → View Card</strong> before offering a promo to confirm what they've already played and won this week.</li>
+        <li>Check <strong>Roster → View Card</strong> before offering a promo to confirm where they stand and what they've already won.</li>
       </ol>
 
     </div>
@@ -267,6 +270,15 @@
     </header>
     <div class="card-status"></div>
     <div class="last-played"></div>
+    <div class="game-progress" hidden>
+      <div class="game-progress-row">
+        <span class="weeks-played"></span>
+        <span class="balls-total"></span>
+        <span class="week-drawn-status"></span>
+      </div>
+      <div class="blackout-bar"><div class="blackout-bar-fill"></div></div>
+      <div class="blackout-bar-label"></div>
+    </div>
     <div class="reward-list"></div>
     <div class="roster-card-actions">
       <button type="button" class="btn btn-ghost btn-sm print-card-btn">Print Card</button>

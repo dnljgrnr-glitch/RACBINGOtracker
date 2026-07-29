@@ -108,7 +108,80 @@
   // ---------- Persistence ----------
 
   function defaultData() {
-    return { customers: [], currentRound: null, history: [] };
+    return { customers: [], history: [], activeCustomerId: null };
+  }
+
+  // Cards used to be reset every week (fresh draws each round). The real
+  // rule: each customer plays on ONE ongoing card that accumulates balls
+  // across as many weekly visits as it takes, until they redeem or staff
+  // closes it out — only then does it become a closed History record. This
+  // promotes any customer's leftover unredeemed round (from before this
+  // change shipped) into their new ongoing activeGame, and folds a stale
+  // pre-upgrade currentRound the same way, so nobody's in-progress card or
+  // pending win gets lost when this update lands. Idempotent — safe to run
+  // on every load.
+  function migrateToPersistentGames(parsed) {
+    let changed = false;
+    if (parsed.activeCustomerId === undefined) { parsed.activeCustomerId = null; changed = true; }
+    parsed.customers.forEach(c => {
+      if (c.activeGame === undefined) { c.activeGame = null; changed = true; }
+    });
+
+    const pendingByCustomer = new Map();
+    parsed.history.forEach(round => {
+      if (round.wins.length > 0 && !round.redeemed) {
+        const existing = pendingByCustomer.get(round.customerId);
+        if (!existing || round.startedAt > existing.startedAt) pendingByCustomer.set(round.customerId, round);
+      }
+    });
+    pendingByCustomer.forEach((round, customerId) => {
+      const customer = parsed.customers.find(c => c.id === customerId);
+      if (!customer || customer.activeGame) return;
+      customer.activeGame = {
+        id: round.id,
+        draws: round.draws.slice(),
+        wins: round.wins.slice(),
+        startedAt: round.startedAt,
+        sessionLog: [{ startedAt: round.startedAt, balls: round.draws.slice() }]
+      };
+      if (round.card && JSON.stringify(round.card) !== JSON.stringify(customer.card)) {
+        console.warn(`Migration: ${customer.name}'s live card didn't match their pending win's card — restoring the card tied to the recorded wins.`);
+        customer.card = JSON.parse(JSON.stringify(round.card));
+      }
+      parsed.history = parsed.history.filter(r => r !== round);
+      changed = true;
+    });
+
+    if (parsed.currentRound && parsed.currentRound.customerId) {
+      const customer = parsed.customers.find(c => c.id === parsed.currentRound.customerId);
+      if (customer) {
+        if (!customer.activeGame) {
+          customer.activeGame = {
+            id: uid(),
+            draws: parsed.currentRound.draws.slice(),
+            wins: parsed.currentRound.wins.slice(),
+            startedAt: parsed.currentRound.startedAt,
+            sessionLog: [{ startedAt: parsed.currentRound.startedAt, balls: parsed.currentRound.draws.slice() }]
+          };
+        } else {
+          // Rare dual case: an unredeemed history round AND a stale
+          // in-progress round for the same customer. Append rather than
+          // merge/dedupe — a duplicate ball number here is harmless (the
+          // Set-based hit-matrix logic tolerates it), just don't lose data.
+          const newBalls = parsed.currentRound.draws.slice();
+          customer.activeGame.draws = customer.activeGame.draws.concat(newBalls);
+          customer.activeGame.sessionLog.push({ startedAt: parsed.currentRound.startedAt, balls: newBalls });
+        }
+        const matrix = hitMatrix(customer, new Set(customer.activeGame.draws));
+        const patterns = achievedPatterns(matrix);
+        // Deliberately not routed through the win-popup queue — nothing
+        // should fire fireworks retroactively for a pre-upgrade round.
+        customer.activeGame.wins = computeTierWins(patterns, customer.activeGame.wins);
+      }
+      changed = true;
+    }
+    if (parsed.currentRound !== undefined) { delete parsed.currentRound; changed = true; }
+    return changed;
   }
 
   function loadData() {
@@ -138,6 +211,8 @@
       };
       parsed.history.forEach(round => fixCornersPrize(round.wins));
       if (parsed.currentRound) fixCornersPrize(parsed.currentRound.wins);
+      const changed = migrateToPersistentGames(parsed);
+      if (changed) localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       return parsed;
     } catch (e) {
       console.error("Failed to load RACBINGO data, starting fresh.", e);
@@ -150,7 +225,6 @@
   }
 
   let state = loadData();
-  let selectedCustomerId = null;
   const expandedCustomerIds = new Set();
   const editingRoundIds = new Set();
 
@@ -196,10 +270,6 @@
 
   function findCustomer(id) {
     return state.customers.find(c => c.id === id);
-  }
-
-  function drawnSet() {
-    return new Set(state.currentRound ? state.currentRound.draws : []);
   }
 
   function hitMatrix(customer, drawn) {
@@ -253,7 +323,18 @@
     return !!customer.lastPlayedAt && (Date.now() - customer.lastPlayedAt) < WEEK_MS;
   }
 
-  // Rounds this customer won something on but hasn't redeemed yet.
+  // How many of the 24 real (non-FREE) cells are currently hit, for a
+  // Roster progress-toward-Blackout indicator.
+  function hitCountFor(customer, drawn) {
+    return hitMatrix(customer, drawn).flat().filter(Boolean).length - 1;
+  }
+
+  // Legacy leftover: rounds this customer won something on but hasn't
+  // redeemed yet, still sitting in History. Ordinarily empty going forward —
+  // active pending wins now live on customer.activeGame — but a customer
+  // could end up with more than one of these via the persistent-game
+  // migration's rare dual-pending edge case, so this stays live rather than
+  // being deleted.
   function pendingRewardsFor(customerId) {
     return state.history.filter(r => r.customerId === customerId && r.wins.length > 0 && !r.redeemed);
   }
@@ -262,12 +343,10 @@
     return state.history.filter(r => r.customerId === customerId);
   }
 
-  // The draws to validate a customer's card against: their live round if one
-  // is in progress, otherwise their most recently completed round.
+  // The draws to validate a customer's card against: their ongoing game if
+  // they have one, otherwise their most recently completed game.
   function relevantDrawsFor(customer) {
-    if (state.currentRound && state.currentRound.customerId === customer.id) {
-      return new Set(state.currentRound.draws);
-    }
+    if (customer.activeGame) return new Set(customer.activeGame.draws);
     const rounds = roundsFor(customer.id);
     return rounds.length ? new Set(rounds[0].draws) : new Set();
   }
@@ -275,7 +354,7 @@
   // ---------- Customer CRUD ----------
 
   function addCustomer(name) {
-    const customer = { id: uid(), name: name.trim(), card: emptyCard(), lastPlayedAt: null };
+    const customer = { id: uid(), name: name.trim(), card: emptyCard(), lastPlayedAt: null, activeGame: null };
     state.customers.push(customer);
     saveData();
     return customer;
@@ -283,8 +362,7 @@
 
   function removeCustomer(id) {
     state.customers = state.customers.filter(c => c.id !== id);
-    if (state.currentRound && state.currentRound.customerId === id) state.currentRound = null;
-    if (selectedCustomerId === id) selectedCustomerId = null;
+    if (state.activeCustomerId === id) state.activeCustomerId = null;
     saveData();
   }
 
@@ -300,120 +378,166 @@
     saveData();
   }
 
-  // ---------- Round actions ----------
+  // ---------- Game actions ----------
+  // A customer plays on one ongoing card that accumulates balls across as
+  // many weekly visits as it takes (see customer.activeGame), until they
+  // redeem or staff closes it out. state.activeCustomerId just tracks who's
+  // currently pulled up in the Play Round tab — matching the one physical
+  // ball machine — it doesn't own any game data itself.
 
-  function startRound(customerId) {
+  function startNewGame(customerId) {
     const customer = findCustomer(customerId);
     if (!customer) return;
-    const previousLastPlayedAt = customer.lastPlayedAt;
-    customer.lastPlayedAt = Date.now();
-    state.currentRound = { customerId, draws: [], wins: [], startedAt: Date.now(), previousLastPlayedAt };
+    customer.activeGame = { id: uid(), draws: [], wins: [], startedAt: Date.now(), sessionLog: [] };
+    state.activeCustomerId = customerId;
     saveData();
   }
 
-  // Discards the in-progress round without saving anything to History — for
-  // when the wrong customer was pulled up by mistake and nothing valid
-  // should be recorded. Restores their prior "last played" timestamp too.
-  function cancelRound() {
-    if (!state.currentRound) return;
-    const customer = findCustomer(state.currentRound.customerId);
-    if (customer) customer.lastPlayedAt = state.currentRound.previousLastPlayedAt || null;
-    state.currentRound = null;
+  // Only valid before any ball's been drawn this visit — once a ball is
+  // drawn it's saved permanently to the customer's ongoing game, so a full
+  // discard isn't safe anymore. A mistake caught after that gets corrected
+  // by removing the specific wrong balls (see removeDrawAtFor).
+  function cancelEmptyGame(customerId) {
+    const customer = findCustomer(customerId);
+    if (!customer || !customer.activeGame || customer.activeGame.draws.length > 0) return;
+    customer.activeGame = null;
+    state.activeCustomerId = null;
     saveData();
   }
 
-  function drawBall(num) {
+  // Just steps away from this customer for now — nothing to discard or
+  // archive, every draw is already saved immediately.
+  function finishVisit() {
+    state.activeCustomerId = null;
+    saveData();
+  }
+
+  // Groups draws into weekly sessions for the Roster's "weeks played" /
+  // "already drawn this week" display — reuses the same rolling WEEK_MS
+  // window as playedThisWeek. Opens a new session when the last one is
+  // stale or absent, otherwise appends to it.
+  function currentSessionFor(game) {
+    const last = game.sessionLog[game.sessionLog.length - 1];
+    if (last && (Date.now() - last.startedAt) < WEEK_MS) return last;
+    const session = { startedAt: Date.now(), balls: [] };
+    game.sessionLog.push(session);
+    return session;
+  }
+
+  function drawBallForCustomer(customerId, num) {
     const errEl = document.getElementById("drawError");
     errEl.hidden = true;
     errEl.classList.remove("is-info");
 
-    if (!state.currentRound) return false;
+    const customer = findCustomer(customerId);
+    if (!customer || !customer.activeGame) return false;
     if (!Number.isInteger(num) || num < 1 || num > 75) {
       errEl.textContent = "Enter a number between 1 and 75.";
       errEl.hidden = false;
       return false;
     }
-    if (state.currentRound.draws.includes(num)) {
-      errEl.textContent = `🔁 ${num} was already pulled this round — reroll, draw again.`;
+    if (customer.activeGame.draws.includes(num)) {
+      errEl.textContent = `🔁 ${num} was already pulled for this card — reroll, draw again.`;
       errEl.classList.add("is-info");
       errEl.hidden = false;
       return false;
     }
 
-    state.currentRound.draws.push(num);
-    checkForNewWins();
+    customer.activeGame.draws.push(num);
+    currentSessionFor(customer.activeGame).balls.push(num);
+    customer.lastPlayedAt = Date.now();
+    checkForNewWinsFor(customer);
     saveData();
     return true;
   }
 
-  // Removes one specific drawn ball from the active round (not just the most
-  // recent), for correcting a misread/mistyped number without losing the
-  // rest of the round. Rechecks win patterns against the remaining draws.
-  function removeDrawAt(index) {
-    if (!state.currentRound) return;
-    if (index < 0 || index >= state.currentRound.draws.length) return;
-    state.currentRound.draws.splice(index, 1);
-    const customer = findCustomer(state.currentRound.customerId);
-    if (customer) {
-      const matrix = hitMatrix(customer, drawnSet());
-      const patterns = achievedPatterns(matrix);
-      state.currentRound.wins = computeTierWins(patterns, state.currentRound.wins);
+  // Removes one specific drawn ball (not just the most recent), for
+  // correcting a misread/mistyped number without losing the rest of the
+  // game. Also drops it from whichever weekly session logged it, and
+  // rechecks win patterns against the remaining draws.
+  function removeDrawAtFor(customerId, index) {
+    const customer = findCustomer(customerId);
+    if (!customer || !customer.activeGame) return;
+    const game = customer.activeGame;
+    if (index < 0 || index >= game.draws.length) return;
+    const [removed] = game.draws.splice(index, 1);
+    for (let i = game.sessionLog.length - 1; i >= 0; i--) {
+      const idx = game.sessionLog[i].balls.lastIndexOf(removed);
+      if (idx !== -1) {
+        game.sessionLog[i].balls.splice(idx, 1);
+        if (game.sessionLog[i].balls.length === 0) game.sessionLog.splice(i, 1);
+        break;
+      }
     }
+    const matrix = hitMatrix(customer, new Set(game.draws));
+    const patterns = achievedPatterns(matrix);
+    game.wins = computeTierWins(patterns, game.wins);
     saveData();
   }
 
-  function undoLastDraw() {
-    if (!state.currentRound || state.currentRound.draws.length === 0) return;
-    removeDrawAt(state.currentRound.draws.length - 1);
+  function undoLastDrawFor(customerId) {
+    const customer = findCustomer(customerId);
+    if (!customer || !customer.activeGame || customer.activeGame.draws.length === 0) return;
+    removeDrawAtFor(customerId, customer.activeGame.draws.length - 1);
   }
 
   const pendingWinPopups = [];
 
-  function checkForNewWins() {
-    if (!state.currentRound) return;
-    const customer = findCustomer(state.currentRound.customerId);
-    if (!customer || !cardComplete(customer)) return;
-    const matrix = hitMatrix(customer, drawnSet());
+  function checkForNewWinsFor(customer) {
+    if (!customer.activeGame || !cardComplete(customer)) return;
+    const matrix = hitMatrix(customer, new Set(customer.activeGame.draws));
     const patterns = achievedPatterns(matrix);
-    const newWins = computeTierWins(patterns, state.currentRound.wins);
+    const newWins = computeTierWins(patterns, customer.activeGame.wins);
     newWins.forEach(w => {
-      if (!state.currentRound.wins.includes(w)) {
-        pendingWinPopups.push({ customerName: customer.name, ...w });
+      if (!customer.activeGame.wins.includes(w)) {
+        pendingWinPopups.push({ customerId: customer.id, customerName: customer.name, ...w });
       }
     });
-    state.currentRound.wins = newWins;
+    customer.activeGame.wins = newWins;
   }
 
-  function endRound() {
-    if (!state.currentRound) return;
-    const customer = findCustomer(state.currentRound.customerId);
+  // Ends the customer's current game — whether they're actually redeeming a
+  // win or just resetting with nothing won (the button wording adapts, the
+  // action is the same either way). Archives whatever accumulated to
+  // History as a closed, redeemed record, and clears the way for a new
+  // card. Reuses the game's own id as the archived round's id, so a
+  // certificate printed mid-game and reprinted afterward shows the same
+  // Certificate ID.
+  function closeOutGame(customerId) {
+    const customer = findCustomer(customerId);
+    if (!customer || !customer.activeGame) return;
+    const game = customer.activeGame;
     state.history.unshift({
-      id: uid(),
-      customerId: state.currentRound.customerId,
-      customerName: customer ? customer.name : "(removed customer)",
-      startedAt: state.currentRound.startedAt,
+      id: game.id,
+      customerId: customer.id,
+      customerName: customer.name,
+      startedAt: game.startedAt,
       endedAt: Date.now(),
-      draws: state.currentRound.draws.slice(),
-      card: customer ? JSON.parse(JSON.stringify(customer.card)) : null,
-      wins: state.currentRound.wins.slice(),
-      redeemed: false,
-      redeemedAt: null
+      draws: game.draws.slice(),
+      card: JSON.parse(JSON.stringify(customer.card)),
+      wins: game.wins.slice(),
+      redeemed: true,
+      redeemedAt: Date.now()
     });
-    state.currentRound = null;
-    selectedCustomerId = null;
+    customer.activeGame = null;
+    customer.card = emptyCard();
+    state.activeCustomerId = customerId;
     saveData();
+    switchTab("game");
+    render();
   }
 
-  // Redemption covers everything the round has won, all at once — a
-  // customer can redeem at any point, and the certificate always reflects
-  // their current running total (see certificateInfo).
+  // Legacy path: redeems one of the rare leftover pending rounds that can
+  // exist in History after the persistent-game migration's dual-pending
+  // edge case (see migrateToPersistentGames). Ordinary redemption goes
+  // through closeOutGame instead.
   function confirmRedemption(roundId) {
     const round = state.history.find(r => r.id === roundId);
     if (!round) return;
     round.redeemed = true;
     round.redeemedAt = Date.now();
     saveData();
-    selectedCustomerId = round.customerId;
+    state.activeCustomerId = round.customerId;
     switchTab("game");
     render();
   }
@@ -512,38 +636,40 @@
     const picker = document.getElementById("customerPicker");
     const panel = document.getElementById("customerPanel");
     const active = document.getElementById("activeRound");
+    const customer = state.activeCustomerId ? findCustomer(state.activeCustomerId) : null;
 
-    if (state.currentRound) {
+    if (!customer) {
+      state.activeCustomerId = null;
+      picker.hidden = false;
+      panel.hidden = true;
+      active.hidden = true;
+      return;
+    }
+
+    if (customer.activeGame) {
       picker.hidden = true;
       panel.hidden = true;
       active.hidden = false;
-      renderActiveRound();
+      renderLiveGame(customer);
       return;
     }
-    active.hidden = true;
 
-    if (selectedCustomerId && findCustomer(selectedCustomerId)) {
-      picker.hidden = true;
-      panel.hidden = false;
-      renderCustomerPanel();
-      return;
-    }
-    selectedCustomerId = null;
-    picker.hidden = false;
-    panel.hidden = true;
+    picker.hidden = true;
+    panel.hidden = false;
+    active.hidden = true;
+    renderCustomerPanel();
   }
 
   function formatDate(ts) {
     return new Date(ts).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   }
 
-  // Each round is its own fresh card/draws by design (see roundsFor), so once
-  // a round is submitted it's archived to History, not resumed. This just
-  // surfaces that most recent round as reference on the Play Round screen —
-  // otherwise it's only visible via Roster > View Card > Progression, which
-  // staff coming back to start someone's next round would never think to
-  // check first.
-  function renderLastRoundSummary(customer) {
+  // A customer's most recent CLOSED (redeemed/reset) game, shown only on the
+  // card-setup screen (i.e. while they have no ongoing activeGame) so staff
+  // aren't blind to their history when starting a new one — otherwise it's
+  // only visible via Roster > View Card > Progression, which staff coming
+  // back to start someone's next game would never think to check first.
+  function renderLastCompletedGameSummary(customer) {
     const wrap = document.getElementById("lastRoundSummary");
     const rounds = roundsFor(customer.id);
     if (rounds.length === 0) {
@@ -556,7 +682,7 @@
     document.getElementById("lastRoundDate").textContent = formatDate(last.startedAt);
     document.getElementById("lastRoundWinText").textContent = last.wins.length
       ? `Won ${last.wins.map(w => w.label).join(", ")} — $${roundTotal(last.wins)}${last.redeemed ? " (redeemed)" : " (not yet redeemed)"}`
-      : "No win that round.";
+      : "No win that game.";
 
     const ballsWrap = document.getElementById("lastRoundBalls");
     ballsWrap.innerHTML = "";
@@ -583,7 +709,7 @@
   }
 
   function renderCustomerPanel() {
-    const customer = findCustomer(selectedCustomerId);
+    const customer = findCustomer(state.activeCustomerId);
     document.getElementById("selectedCustomerName").textContent = customer.name;
 
     const alertEl = document.getElementById("weeklyAlert");
@@ -594,7 +720,7 @@
       alertEl.hidden = true;
     }
 
-    renderLastRoundSummary(customer);
+    renderLastCompletedGameSummary(customer);
     renderCardEntryGrid(customer);
     const filled = cardFilledCount(customer);
     const statusEl = document.getElementById("cardEntryStatus");
@@ -656,15 +782,19 @@
     }
   }
 
-  function renderActiveRound() {
-    if (!state.currentRound) return;
-    const customer = findCustomer(state.currentRound.customerId);
-    if (!customer) { state.currentRound = null; saveData(); render(); return; }
+  function renderLiveGame(customer) {
+    const game = customer.activeGame;
+    if (!game) return;
 
     document.getElementById("activeCustomerName").textContent = customer.name;
-    const count = state.currentRound.draws.length;
+    const count = game.draws.length;
     document.getElementById("drawProgress").textContent =
-      count === 1 ? "1 ball drawn" : `${count} balls drawn`;
+      count === 1 ? "1 ball drawn total" : `${count} balls drawn total`;
+
+    const weeksPlayed = game.sessionLog.length;
+    const thisWeekDone = playedThisWeek(customer);
+    document.getElementById("weekStatus").textContent =
+      `Week ${weeksPlayed}${thisWeekDone ? " · already drawn this week" : " · ready to draw this week's balls"}`;
 
     const chipsWrap = document.getElementById("drawnBalls");
     chipsWrap.innerHTML = "";
@@ -674,14 +804,14 @@
       placeholder.textContent = "–";
       chipsWrap.appendChild(placeholder);
     } else {
-      state.currentRound.draws.forEach((num, i) => {
+      game.draws.forEach((num, i) => {
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "ball-chip removable";
         chip.title = "Click to remove this ball";
         chip.innerHTML = `${num}<span class="ball-chip-x">&times;</span>`;
         chip.addEventListener("click", () => {
-          removeDrawAt(i);
+          removeDrawAtFor(customer.id, i);
           render();
         });
         chipsWrap.appendChild(chip);
@@ -690,22 +820,31 @@
 
     // 75 is the natural ceiling (every number already called) — the
     // duplicate-draw check makes this practically self-limiting anyway.
-    const roundFull = count >= 75;
-    document.getElementById("drawInput").disabled = roundFull;
-    document.querySelector("#drawForm button[type=submit]").disabled = roundFull;
+    const gameFull = count >= 75;
+    document.getElementById("drawInput").disabled = gameFull;
+    document.querySelector("#drawForm button[type=submit]").disabled = gameFull;
 
     const winsWrap = document.getElementById("roundWinsWrap");
     const winsList = document.getElementById("roundWinsList");
     winsList.innerHTML = "";
-    winsWrap.hidden = state.currentRound.wins.length === 0;
-    state.currentRound.wins.forEach(w => {
+    winsWrap.hidden = game.wins.length === 0;
+    game.wins.forEach(w => {
       const row = document.createElement("div");
       row.className = "round-win-row";
       row.textContent = `🏆 ${w.label} — $${w.prize} RACCASH`;
       winsList.appendChild(row);
     });
 
-    renderReadOnlyGrid(document.getElementById("activeRoundGrid"), customer, drawnSet());
+    // Cancel only discards a truly empty visit — once a ball's drawn it's
+    // permanent, so per-ball removal (above) is the only way back.
+    document.getElementById("cancelRoundBtn").disabled = count > 0;
+
+    const closeOutBtn = document.getElementById("closeOutGameBtn");
+    closeOutBtn.textContent = game.wins.length > 0
+      ? `Redeem $${roundTotal(game.wins)} & Start New Card`
+      : "Close Out & Start New Card";
+
+    renderReadOnlyGrid(document.getElementById("activeRoundGrid"), customer, new Set(game.draws));
   }
 
   // ---------- Customer search ----------
@@ -758,7 +897,8 @@
         row.appendChild(badge);
       }
       makeRowActivatable(row, () => {
-        selectedCustomerId = c.id;
+        state.activeCustomerId = c.id;
+        saveData();
         input.value = "";
         results.hidden = true;
         render();
@@ -774,7 +914,8 @@
       addRow.textContent = `+ Add "${trimmed}" as new customer`;
       makeRowActivatable(addRow, () => {
         const customer = addCustomer(trimmed);
-        selectedCustomerId = customer.id;
+        state.activeCustomerId = customer.id;
+        saveData();
         input.value = "";
         results.hidden = true;
         render();
@@ -805,9 +946,14 @@
 
       node.querySelector(".btn-remove").addEventListener("click", () => {
         const pendingTotal = roundTotal(pendingRewardsFor(customer.id).flatMap(r => r.wins));
-        const warning = pendingTotal
-          ? ` They still have $${pendingTotal} in unredeemed RACCASH pending — their round history stays in History, but they'll disappear from Roster.`
-          : "";
+        const activeTotal = customer.activeGame ? roundTotal(customer.activeGame.wins) : 0;
+        const totalAtStake = pendingTotal + activeTotal;
+        let warning = "";
+        if (totalAtStake > 0) {
+          warning = ` They still have $${totalAtStake} in unredeemed RACCASH pending — their round history stays in History, but they'll disappear from Roster.`;
+        } else if (customer.activeGame) {
+          warning = ` They have an in-progress card with ${customer.activeGame.draws.length} ball${customer.activeGame.draws.length === 1 ? "" : "s"} drawn — removing them discards that progress.`;
+        }
         showConfirm(`Remove ${customer.name} from the roster? This cannot be undone.${warning}`, () => {
           removeCustomer(customer.id);
           render();
@@ -828,6 +974,25 @@
         lastPlayed.textContent = "Never played";
       }
 
+      const gameProgress = node.querySelector(".game-progress");
+      if (customer.activeGame) {
+        const g = customer.activeGame;
+        const drawn = new Set(g.draws);
+        const hits = hitCountFor(customer, drawn);
+        gameProgress.hidden = false;
+        gameProgress.querySelector(".weeks-played").textContent = `Week ${g.sessionLog.length}`;
+        gameProgress.querySelector(".balls-total").textContent =
+          `${g.draws.length} ball${g.draws.length === 1 ? "" : "s"} drawn`;
+        const weekStatus = gameProgress.querySelector(".week-drawn-status");
+        const done = playedThisWeek(customer);
+        weekStatus.textContent = done ? "Drawn this week ✓" : "Needs this week's balls";
+        weekStatus.classList.toggle("needs-draw", !done);
+        gameProgress.querySelector(".blackout-bar-fill").style.width = `${Math.round((hits / 24) * 100)}%`;
+        gameProgress.querySelector(".blackout-bar-label").textContent = `${hits}/24 toward Blackout`;
+      } else {
+        gameProgress.hidden = true;
+      }
+
       const pending = pendingRewardsFor(customer.id);
       const rewardList = node.querySelector(".reward-list");
       pending.forEach(round => {
@@ -839,9 +1004,24 @@
         btn.addEventListener("click", () => goToRoundInHistory(round.id));
         rewardList.appendChild(btn);
       });
+      if (customer.activeGame && customer.activeGame.wins.length > 0) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "reward-item reward-item-live";
+        const total = roundTotal(customer.activeGame.wins);
+        btn.textContent = `🎁 $${total} pending — ${customer.activeGame.wins.map(w => w.label).join(", ")} — still playing`;
+        btn.addEventListener("click", () => {
+          state.activeCustomerId = customer.id;
+          saveData();
+          switchTab("game");
+          render();
+        });
+        rewardList.appendChild(btn);
+      }
 
       node.querySelector(".play-btn").addEventListener("click", () => {
-        selectedCustomerId = customer.id;
+        state.activeCustomerId = customer.id;
+        saveData();
         switchTab("game");
         render();
       });
@@ -898,16 +1078,17 @@
 
     const rounds = roundsFor(customer.id);
     progression.innerHTML = "";
-    if (state.currentRound && state.currentRound.customerId === customer.id) {
+    if (customer.activeGame) {
+      const g = customer.activeGame;
       const live = document.createElement("div");
       live.className = "progression-row live";
-      live.textContent = `In progress — ${state.currentRound.draws.length} ball${state.currentRound.draws.length === 1 ? "" : "s"} drawn: ${state.currentRound.draws.join(", ") || "none yet"}`;
+      live.textContent = `In progress — Week ${g.sessionLog.length}, ${g.draws.length} ball${g.draws.length === 1 ? "" : "s"} drawn total: ${g.draws.join(", ") || "none yet"}`;
       progression.appendChild(live);
     }
-    if (rounds.length === 0 && !state.currentRound) {
+    if (rounds.length === 0 && !customer.activeGame) {
       const none = document.createElement("div");
       none.className = "progression-row empty";
-      none.textContent = "No rounds played yet.";
+      none.textContent = "No games played yet.";
       progression.appendChild(none);
     } else {
       rounds.forEach(round => {
@@ -938,10 +1119,17 @@
       totalAwarded += total;
       if (!round.redeemed) totalPending += total;
     });
+    // Most pending money now lives on customers' in-progress games, not
+    // History (which only holds closed/redeemed records) — surface it here
+    // too so this total doesn't quietly under-report.
+    const totalInProgress = state.customers.reduce((sum, c) => {
+      return sum + (c.activeGame ? roundTotal(c.activeGame.wins) : 0);
+    }, 0);
     summary.textContent = state.history.length
       ? `Total RACCASH awarded: $${totalAwarded} across ${state.history.length} round${state.history.length === 1 ? "" : "s"}` +
-        (totalPending ? ` · $${totalPending} still unredeemed` : "")
-      : "";
+        (totalPending ? ` · $${totalPending} still unredeemed` : "") +
+        (totalInProgress ? ` · $${totalInProgress} pending in active games` : "")
+      : (totalInProgress ? `$${totalInProgress} pending in active games` : "");
 
     state.history.forEach(round => {
       const item = document.createElement("div");
@@ -1344,7 +1532,14 @@
 
   // ---------- Printable bingo card (front/back, 4x6 index card) ----------
 
+  // Once a game exists, the Card ID is keyed off it so it's stable for the
+  // whole life of the card — a week-3 reprint shows the same ID as week 1.
+  // Before a game has started (first print of a brand-new card), falls back
+  // to a date-stamped ID.
   function cardIdFor(customer) {
+    if (customer.activeGame) {
+      return `RB-${customer.activeGame.id.slice(-8).toUpperCase()}`;
+    }
     const code = customer.id.slice(-6).toUpperCase();
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -1487,15 +1682,27 @@
   }
 
   function exportCsv() {
-    const rows = [["Round Started", "Customer", "Balls Drawn", "Milestones Won", "Total Prize", "Redeemed", "Redeemed Date"]];
+    const rows = [["Game Started", "Customer", "Balls Drawn", "Milestones Won", "Total Prize", "Status", "Redeemed Date"]];
     state.history.forEach(round => {
       const started = new Date(round.startedAt).toLocaleString();
       const balls = round.draws.join(" ");
       const milestones = round.wins.map(w => w.label).join(" + ");
       rows.push([
         started, round.customerName, balls, milestones, roundTotal(round.wins),
-        round.wins.length === 0 ? "" : (round.redeemed ? "Yes" : "No"),
+        round.wins.length === 0 ? "" : (round.redeemed ? "Redeemed" : "Unredeemed"),
         round.redeemed ? new Date(round.redeemedAt).toLocaleString() : ""
+      ]);
+    });
+    // Customers still mid-game (not yet redeemed/closed out) don't have a
+    // History record yet — surface their running total here too, so a
+    // spreadsheet review of all customers doesn't miss pending winners.
+    state.customers.forEach(customer => {
+      if (!customer.activeGame || customer.activeGame.wins.length === 0) return;
+      const g = customer.activeGame;
+      rows.push([
+        new Date(g.startedAt).toLocaleString(), customer.name, g.draws.join(" "),
+        g.wins.map(w => w.label).join(" + "), roundTotal(g.wins),
+        `In Progress (Week ${g.sessionLog.length})`, ""
       ]);
     });
     const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
@@ -1547,9 +1754,12 @@
         const parsed = JSON.parse(reader.result);
         validateBackupShape(parsed);
         showConfirm("Importing will replace all current data. Continue?", () => {
+          // Restoring a backup taken before the persistent-game update needs
+          // the same migration loadData() runs on every startup, so it
+          // doesn't reintroduce the old weekly-reset bug.
+          migrateToPersistentGames(parsed);
           state = parsed;
-          if (state.currentRound === undefined) state.currentRound = null;
-          selectedCustomerId = null;
+          state.activeCustomerId = null;
           saveData();
           render();
         });
@@ -1578,21 +1788,22 @@
   });
 
   document.getElementById("changeCustomerBtn").addEventListener("click", () => {
-    selectedCustomerId = null;
+    state.activeCustomerId = null;
+    saveData();
     render();
   });
 
   document.getElementById("startRoundBtn").addEventListener("click", () => {
-    if (!selectedCustomerId) return;
-    const customer = findCustomer(selectedCustomerId);
+    if (!state.activeCustomerId) return;
+    const customer = findCustomer(state.activeCustomerId);
     if (!customer || !cardComplete(customer)) return;
-    startRound(selectedCustomerId);
+    startNewGame(state.activeCustomerId);
     render();
   });
 
   document.getElementById("generateCardBtn").addEventListener("click", () => {
-    if (!selectedCustomerId) return;
-    const customer = findCustomer(selectedCustomerId);
+    if (!state.activeCustomerId) return;
+    const customer = findCustomer(state.activeCustomerId);
     if (!customer) return;
     const doGenerate = () => {
       customer.card = generateRandomCard();
@@ -1607,8 +1818,8 @@
   });
 
   document.getElementById("printCardBtn").addEventListener("click", () => {
-    if (!selectedCustomerId) return;
-    const customer = findCustomer(selectedCustomerId);
+    if (!state.activeCustomerId) return;
+    const customer = findCustomer(state.activeCustomerId);
     if (!customer || !cardComplete(customer)) return;
     printCard(customer);
   });
@@ -1617,28 +1828,38 @@
     e.preventDefault();
     const input = document.getElementById("drawInput");
     const num = parseInt(input.value, 10);
-    if (drawBall(num)) input.value = "";
+    if (state.activeCustomerId && drawBallForCustomer(state.activeCustomerId, num)) input.value = "";
     render();
     input.focus();
   });
 
   document.getElementById("undoDrawBtn").addEventListener("click", () => {
-    undoLastDraw();
+    if (state.activeCustomerId) undoLastDrawFor(state.activeCustomerId);
     render();
   });
 
-  document.getElementById("endRoundBtn").addEventListener("click", () => {
-    showConfirm("Submit this round and move to the next customer?", () => {
-      endRound();
-      render();
-    });
+  // Just stepping away for now — nothing to discard, every draw already
+  // saved immediately, so no confirmation needed.
+  document.getElementById("finishVisitBtn").addEventListener("click", () => {
+    finishVisit();
+    render();
   });
 
+  // Only enabled while nothing's been drawn yet this visit (see
+  // renderLiveGame) — nothing at stake, so no confirmation needed either.
   document.getElementById("cancelRoundBtn").addEventListener("click", () => {
-    showConfirm("Cancel this round without saving anything?", () => {
-      cancelRound();
-      render();
-    });
+    if (state.activeCustomerId) cancelEmptyGame(state.activeCustomerId);
+    render();
+  });
+
+  document.getElementById("closeOutGameBtn").addEventListener("click", () => {
+    const customer = findCustomer(state.activeCustomerId);
+    if (!customer || !customer.activeGame) return;
+    const total = roundTotal(customer.activeGame.wins);
+    const message = total > 0
+      ? `Redeem $${total} RACCASH for ${customer.name} and start them on a brand new card? This closes out their current game.`
+      : `Close out ${customer.name}'s current card with no win and start them on a brand new one? This cannot be undone.`;
+    showConfirm(message, () => closeOutGame(customer.id));
   });
 
   document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
@@ -1652,12 +1873,13 @@
   document.getElementById("winModalAckBtn").addEventListener("click", dismissWinModal);
   document.getElementById("winModalPrintBtn").addEventListener("click", () => {
     if (!activeModalWin) return;
-    // Print reflects everything won in the round so far, not just this one
-    // milestone — fall back to the single win if the round somehow isn't
-    // live anymore (e.g. it was already submitted).
-    const isLive = state.currentRound && state.currentRound.customerId;
-    const wins = isLive ? state.currentRound.wins : [activeModalWin];
-    const certKey = isLive ? `${state.currentRound.customerId}-${state.currentRound.startedAt}` : null;
+    // Print reflects everything won in the game so far, not just this one
+    // milestone — fall back to the single win if the game somehow isn't
+    // live anymore (e.g. it was already closed out).
+    const customer = activeModalWin.customerId ? findCustomer(activeModalWin.customerId) : null;
+    const isLive = customer && customer.activeGame;
+    const wins = isLive ? customer.activeGame.wins : [activeModalWin];
+    const certKey = isLive ? customer.activeGame.id : null;
     printCertificate(activeModalWin.customerName, wins, certKey);
   });
 

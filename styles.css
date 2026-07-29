@@ -132,6 +132,7 @@ main { max-width: 900px; margin: 0 auto; padding: 20px; padding-bottom: 80px; }
 }
 .active-customer-name { margin: 0 0 6px; font-size: 1.4rem; }
 .draw-progress { color: var(--text-dim); font-weight: 600; }
+.week-status { color: var(--win); font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
 .game-top-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .section-heading { color: var(--text-dim); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px; }
@@ -382,6 +383,26 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
 .card-status.complete { color: var(--hit); }
 .last-played { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 8px; }
 .last-played.recent { color: var(--danger); font-weight: 700; }
+
+.game-progress { margin-bottom: 10px; }
+.game-progress-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.week-drawn-status.needs-draw { color: var(--win); font-weight: 700; }
+.blackout-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-alt);
+  overflow: hidden;
+}
+.blackout-bar-fill { height: 100%; background: var(--hit); border-radius: 999px; }
+.blackout-bar-label { font-size: 0.7rem; color: var(--text-dim); margin-top: 3px; }
+
 .reward-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .reward-item {
   display: block;
@@ -397,6 +418,8 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   cursor: pointer;
 }
 .reward-item:hover { background: var(--accent); }
+.reward-item-live { background: var(--hit); color: #fff; }
+.reward-item-live:hover { background: var(--hit-bg); color: var(--hit); border: 1px solid var(--hit); }
 .play-btn { width: 100%; }
 
 .view-card-btn { width: 100%; margin-top: 8px; }
