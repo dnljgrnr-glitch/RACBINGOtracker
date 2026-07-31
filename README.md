@@ -61,6 +61,14 @@ handles more than one trusted machine.
   in the actual grid layout (for matching against the physical card) plus a "Progression"
   log of their current in-progress game (if any) and every past closed game, what was drawn,
   and what they won — useful for double-checking data entry and for record-keeping.
+- **Digital ball cage (backup/showcase)** — the physical cage is still how customers actually
+  play; on the live game screen, a **🎱 Physical Cage / 🎰 Digital Ball Cage** toggle switches
+  to an animated cage of every number not yet drawn for that card, continuously bouncing, with
+  its own **Draw a Ball** button that picks uniformly at random, animates the pull, and feeds
+  the result through the exact same win-checking as typing a number in manually. Useful as a
+  backup if the physical machine is unavailable, or just as an "ooh-ahh" showcase moment.
+  Switching modes mid-visit is seamless — it doesn't reset or duplicate anything, and a ball
+  drawn one way is correctly excluded if you switch to the other.
 - **Weekly pacing** — customers are meant to draw a handful of new balls each week (about 5
   is the usual pace); if someone already had balls drawn in the last 7 days, a note shows
   when you pull up their game. It's a heads-up, not a hard stop — there's no built-in limit

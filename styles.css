@@ -137,6 +137,61 @@ main { max-width: 900px; margin: 0 auto; padding: 20px; padding-bottom: 80px; }
 
 .section-heading { color: var(--text-dim); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px; }
 
+/* Draw mode toggle + digital ball cage */
+.draw-mode-toggle { display: flex; gap: 8px; margin: 4px 0 16px; }
+.draw-mode-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.draw-mode-btn.active { background: var(--accent); color: #1a1300; border-color: var(--accent); }
+.draw-mode-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
+.digital-cage-panel { text-align: center; padding: 6px 0 4px; }
+.ball-cage-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+#ballCageCanvas {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #24384d 0%, #101c28 70%, #0a141d 100%);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.04), inset 0 0 30px rgba(0, 0, 0, 0.5);
+}
+.ball-reveal-slot {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 3px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ball-reveal-placeholder { color: var(--text-dim); font-size: 2rem; font-weight: 900; }
+.revealed-ball {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.9rem;
+  font-weight: 900;
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: win-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 .call-form label {
   display: block;
   font-size: 0.85rem;

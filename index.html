@@ -103,6 +103,11 @@
         </div>
       </div>
 
+      <div class="draw-mode-toggle" id="drawModeToggle">
+        <button type="button" class="draw-mode-btn active" data-mode="manual">🎱 Physical Cage</button>
+        <button type="button" class="draw-mode-btn" data-mode="digital">🎰 Digital Ball Cage</button>
+      </div>
+
       <form id="drawForm" class="call-form" autocomplete="off">
         <label for="drawInput">Pull a ball</label>
         <div class="call-row">
@@ -113,6 +118,15 @@
         <p id="drawError" class="field-error" hidden></p>
         <p class="hint-text">Draws add to this card's running total — it carries over week to week until they redeem or you close it out. Click any drawn ball below to remove that specific one, then click <strong>Done for Now</strong> when finished for this visit.</p>
       </form>
+
+      <div id="digitalCagePanel" class="digital-cage-panel" hidden>
+        <div class="ball-cage-wrap">
+          <canvas id="ballCageCanvas" width="300" height="300"></canvas>
+          <div class="ball-reveal-slot" id="ballRevealSlot"><span class="ball-reveal-placeholder">?</span></div>
+        </div>
+        <button type="button" id="digitalDrawBtn" class="btn btn-primary btn-big">🎲 Draw a Ball</button>
+        <p class="hint-text"><span id="cageRemainingCount"></span> balls left in the cage for this card. Backup/showcase mode — the physical cage is still how customers play; this pulls the same way and feeds the same card either way.</p>
+      </div>
 
       <div class="drawn-balls" id="drawnBalls"></div>
 
@@ -226,6 +240,7 @@
         <li>Made a mistake this visit? Click any drawn ball to remove just that one, or click <strong>Undo Last Draw</strong> for the most recent one. This works on any ball in their history, not just today's.</li>
         <li>Watch the <strong>Live Card Progress</strong> grid — matched numbers highlight green as you go, reflecting every ball ever drawn for that card, not just this visit.</li>
         <li>Click <strong>Done for Now / Next Customer</strong> once you're finished drawing for this visit — everything's already saved, so this just clears the screen for the next person. Their card stays exactly as it is until they come back.</li>
+        <li>The <strong>🎱 Physical Cage / 🎰 Digital Ball Cage</strong> toggle above the draw box switches to an animated on-screen cage with its own Draw button — a backup for if the real machine isn't available, or just a fun alternative. It draws the same way and updates the same card either way; switch back and forth anytime without losing anything.</li>
       </ol>
 
       <h2 class="help-title">Wins and Celebrations</h2>

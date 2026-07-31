@@ -648,6 +648,12 @@
     const active = document.getElementById("activeRound");
     const customer = state.activeCustomerId ? findCustomer(state.activeCustomerId) : null;
 
+    // Only the live-game view (below) ever needs the cage loop running —
+    // stop it here by default so it doesn't keep spinning in the
+    // background on every other screen, and let renderLiveGame restart it
+    // if the customer is actually mid-game in digital mode.
+    stopCageAnimation();
+
     if (!customer) {
       state.activeCustomerId = null;
       picker.hidden = false;
@@ -884,12 +890,48 @@
     const drawInput = document.getElementById("drawInput");
     drawInput.disabled = gameFull;
     document.querySelector("#drawForm button[type=submit]").disabled = gameFull;
-    // Staff should be able to type the next ball immediately without
-    // clicking into the box first — refocus it on every render of this
-    // screen, unless a modal is up front (win celebration or a confirm).
     const modalOpen = !document.getElementById("winModalOverlay").hidden ||
       !document.getElementById("confirmModalOverlay").hidden;
-    if (!gameFull && !modalOpen) drawInput.focus();
+
+    document.getElementById("drawForm").hidden = drawMode !== "manual";
+    document.getElementById("digitalCagePanel").hidden = drawMode !== "digital";
+
+    if (drawMode === "manual") {
+      // Staff should be able to type the next ball immediately without
+      // clicking into the box first — refocus it on every render of this
+      // screen, unless a modal is up front (win celebration or a confirm).
+      if (!gameFull && !modalOpen) drawInput.focus();
+    } else {
+      const drawnSet = new Set(game.draws);
+      if (cageCustomerId !== customer.id) {
+        // New customer (or first switch into digital mode this visit) —
+        // full randomized init.
+        const remaining = [];
+        for (let n = 1; n <= 75; n++) if (!drawnSet.has(n)) remaining.push(n);
+        initCageBalls(remaining);
+        cageCustomerId = customer.id;
+        document.getElementById("ballRevealSlot").innerHTML = '<span class="ball-reveal-placeholder">?</span>';
+      } else {
+        // Same customer, something else changed (a ball drawn some other
+        // way, a chip removed) — just drop whichever balls are no longer
+        // undrawn, don't reset everyone else's bounce mid-flight.
+        cageBalls = cageBalls.filter(b => !drawnSet.has(b.num));
+        // A ball removed via the chip list needs to come back into play.
+        const cagedNums = new Set(cageBalls.map(b => b.num));
+        for (let n = 1; n <= 75; n++) {
+          if (!drawnSet.has(n) && !cagedNums.has(n)) {
+            const canvas = document.getElementById("ballCageCanvas");
+            const cx = canvas.width / 2, cy = canvas.height / 2;
+            const speed = 0.9 + Math.random() * 1.3;
+            const dir = Math.random() * Math.PI * 2;
+            cageBalls.push({ num: n, x: cx, y: cy, vx: Math.cos(dir) * speed, vy: Math.sin(dir) * speed, radius: 11, color: BALL_COLORS[columnForNumber(n)] });
+          }
+        }
+      }
+      document.getElementById("cageRemainingCount").textContent = cageBalls.length;
+      document.getElementById("digitalDrawBtn").disabled = gameFull || cageBalls.length === 0 || cageDrawInFlight;
+      if (!cageAnimId && !modalOpen) stepCage();
+    }
 
     const winsWrap = document.getElementById("roundWinsWrap");
     const winsList = document.getElementById("roundWinsList");
@@ -1750,6 +1792,118 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
+  // ---------- Digital ball cage ----------
+  // The physical cage is still how customers actually play — this is a
+  // backup/showcase alternative that draws the same way (uniformly random
+  // from whatever's left undrawn for this card) and feeds the exact same
+  // drawBallForCustomer path, just with an animated cage instead of typing
+  // a number that came out of the real machine.
+
+  const BALL_COLORS = { B: "#2ea043", I: "#c8102e", N: "#2b6cb0", G: "#d4a017", O: "#7c3aed" };
+
+  function columnForNumber(num) {
+    return COLUMNS.find(col => num >= COLUMN_RANGES[col][0] && num <= COLUMN_RANGES[col][1]);
+  }
+
+  let drawMode = "manual"; // "manual" | "digital" — persists across customers within the session
+  let cageBalls = [];
+  let cageCustomerId = null;
+  let cageAnimId = null;
+  let cageDrawInFlight = false;
+
+  function initCageBalls(remainingNumbers) {
+    const canvas = document.getElementById("ballCageCanvas");
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2, cy = h / 2, cageRadius = Math.min(w, h) / 2 - 16;
+    cageBalls = remainingNumbers.map(num => {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * (cageRadius - 12);
+      const speed = 0.9 + Math.random() * 1.3;
+      const dir = Math.random() * Math.PI * 2;
+      return {
+        num,
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        vx: Math.cos(dir) * speed,
+        vy: Math.sin(dir) * speed,
+        radius: 11,
+        color: BALL_COLORS[columnForNumber(num)]
+      };
+    });
+  }
+
+  function stepCage() {
+    const canvas = document.getElementById("ballCageCanvas");
+    if (!canvas) { cageAnimId = null; return; }
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2, cy = h / 2, cageRadius = Math.min(w, h) / 2 - 16;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.beginPath();
+    ctx.arc(cx, cy, cageRadius + 10, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    cageBalls.forEach(b => {
+      b.x += b.vx;
+      b.y += b.vy;
+      const dx = b.x - cx, dy = b.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist + b.radius > cageRadius) {
+        const nx = dx / dist, ny = dy / dist;
+        const dot = b.vx * nx + b.vy * ny;
+        b.vx -= 2 * dot * nx;
+        b.vy -= 2 * dot * ny;
+        const overshoot = dist + b.radius - cageRadius;
+        b.x -= nx * overshoot;
+        b.y -= ny * overshoot;
+      }
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+      ctx.fillStyle = b.color;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.75)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 10px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(b.num, b.x, b.y);
+    });
+
+    cageAnimId = requestAnimationFrame(stepCage);
+  }
+
+  function stopCageAnimation() {
+    if (cageAnimId) cancelAnimationFrame(cageAnimId);
+    cageAnimId = null;
+  }
+
+  function showRevealedBall(ball) {
+    const slot = document.getElementById("ballRevealSlot");
+    slot.innerHTML = `<div class="revealed-ball" style="background:${ball.color}">${ball.num}</div>`;
+  }
+
+  function drawFromDigitalCage() {
+    if (cageDrawInFlight || cageBalls.length === 0 || !state.activeCustomerId) return;
+    cageDrawInFlight = true;
+    document.getElementById("digitalDrawBtn").disabled = true;
+    const idx = Math.floor(Math.random() * cageBalls.length);
+    const [picked] = cageBalls.splice(idx, 1);
+    showRevealedBall(picked);
+    const customerId = state.activeCustomerId;
+    setTimeout(() => {
+      cageDrawInFlight = false;
+      if (state.activeCustomerId === customerId) {
+        drawBallForCustomer(customerId, picked.num);
+        render();
+      }
+    }, 900);
+  }
+
   // ---------- Printable certificate ----------
 
   const STORE_NUMBER = "650"; // inferred from the "650Goats" login / RAC650 naming — update if wrong
@@ -2181,6 +2335,16 @@
     if (state.activeCustomerId) undoLastDrawFor(state.activeCustomerId);
     render();
   });
+
+  document.getElementById("drawModeToggle").addEventListener("click", e => {
+    const btn = e.target.closest(".draw-mode-btn");
+    if (!btn) return;
+    drawMode = btn.dataset.mode;
+    document.querySelectorAll("#drawModeToggle .draw-mode-btn").forEach(b => b.classList.toggle("active", b === btn));
+    render();
+  });
+
+  document.getElementById("digitalDrawBtn").addEventListener("click", drawFromDigitalCage);
 
   // Just stepping away for now — nothing to discard, every draw already
   // saved immediately, so no confirmation needed.
