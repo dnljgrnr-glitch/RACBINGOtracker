@@ -62,7 +62,7 @@ handles more than one trusted machine.
   log of their current in-progress game (if any) and every past closed game, what was drawn,
   and what they won — useful for double-checking data entry and for record-keeping.
 - **Digital ball cage (backup/showcase)** — the physical cage is still how customers actually
-  play; on the live game screen, a **🎱 Physical Cage / 🎰 Digital Ball Cage** toggle switches
+  play; on the live game screen, a **🎱 In-Store Cage / 🎰 Digital Ball Cage** toggle switches
   to an animated cage of every number not yet drawn for that card, continuously bouncing, with
   its own **Draw a Ball** button that picks uniformly at random, animates the pull, and feeds
   the result through the exact same win-checking as typing a number in manually. Useful as a

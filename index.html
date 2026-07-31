@@ -3,15 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>RACBINGO Tracker</title>
+<title>RACBINGO</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <div id="loginScreen" class="login-screen">
   <form id="loginForm" class="login-card" autocomplete="off">
-    <img src="assets/rac-logo.png" alt="RAC" class="login-logo">
-    <h1>RACBINGO <span>Tracker</span></h1>
+    <h1>RACBINGO</h1>
     <p class="login-subtitle">Staff sign-in required</p>
     <label for="loginUsername">Username</label>
     <input type="text" id="loginUsername" autocomplete="username" autofocus required>
@@ -24,7 +23,10 @@
 
 <div id="appRoot" hidden>
 <header class="app-header">
-  <h1>RACBINGO <span>Tracker</span></h1>
+  <div class="app-header-brand">
+    <h1>RACBINGO</h1>
+    <span class="active-players-badge" id="activePlayersBadge" hidden></span>
+  </div>
   <nav class="tabs" id="tabs">
     <button class="tab-btn active" data-tab="game">Play Round</button>
     <button class="tab-btn" data-tab="roster">Roster</button>
@@ -39,7 +41,6 @@
   <span>Line (row / column / diagonal) = <strong>$25</strong></span>
   <span>Four Corners = <strong>$75</strong></span>
   <span>Full BINGO = <strong>$100</strong></span>
-  <span class="prize-legend-note">— each milestone pays once per round</span>
 </div>
 
 <main id="app">
@@ -55,10 +56,9 @@
       </div>
     </div>
 
-    <div id="activePlayersPanel" class="panel-box" hidden>
-      <h2 class="section-heading">Active Players</h2>
-      <div class="active-players-list" id="activePlayersList"></div>
-      <p id="noActivePlayers" class="empty-state" hidden>No customers currently mid-card — search above to start someone new.</p>
+    <div id="idleCagePanel" class="panel-box idle-cage-panel" hidden>
+      <canvas id="idleCageCanvas" width="380" height="380"></canvas>
+      <p class="hint-text idle-cage-caption">Search for a customer above to start pulling their numbers.</p>
     </div>
 
     <div id="customerPanel" class="panel-box" hidden>
@@ -80,8 +80,8 @@
       <h3 class="section-heading">Set Up Their Card</h3>
       <p class="hint-text">This is the one card they'll play on until they redeem or you close out their game — generate a random valid card, or enter all 24 numbers from a physical card by hand (5 per column; the center is always free).</p>
       <div class="card-entry-actions">
-        <button type="button" id="generateCardBtn" class="btn btn-ghost">🎲 Generate Random Card</button>
-        <button type="button" id="printCardBtn" class="btn btn-ghost" disabled>🖨 Print Card (Front/Back)</button>
+        <button type="button" id="generateCardBtn" class="btn btn-ghost">Generate Random Card</button>
+        <button type="button" id="printCardBtn" class="btn btn-ghost" disabled>Print Card (Front/Back)</button>
       </div>
       <div class="card-entry-grid" id="cardEntryGrid"></div>
       <p id="cardEntryStatus" class="card-entry-status"></p>
@@ -98,14 +98,14 @@
         </div>
         <div class="game-top-actions">
           <button type="button" id="cancelRoundBtn" class="btn btn-ghost">Cancel</button>
-          <button type="button" id="finishVisitBtn" class="btn btn-primary">Done for Now / Next Customer</button>
-          <button type="button" id="closeOutGameBtn" class="btn btn-danger-outline">Close Out &amp; Start New Card</button>
+          <button type="button" id="finishVisitBtn" class="btn btn-primary">Submit</button>
+          <button type="button" id="closeOutGameBtn" class="btn btn-danger-outline">Close Out Card</button>
         </div>
       </div>
 
       <div class="draw-mode-toggle" id="drawModeToggle">
-        <button type="button" class="draw-mode-btn active" data-mode="manual">🎱 Physical Cage</button>
-        <button type="button" class="draw-mode-btn" data-mode="digital">🎰 Digital Ball Cage</button>
+        <button type="button" class="draw-mode-btn active" data-mode="manual">In-store</button>
+        <button type="button" class="draw-mode-btn" data-mode="digital">Digital Ball Cage</button>
       </div>
 
       <form id="drawForm" class="call-form" autocomplete="off">
@@ -116,7 +116,7 @@
           <button type="button" id="undoDrawBtn" class="btn btn-ghost">Undo Last Draw</button>
         </div>
         <p id="drawError" class="field-error" hidden></p>
-        <p class="hint-text">Draws add to this card's running total — it carries over week to week until they redeem or you close it out. Click any drawn ball below to remove that specific one, then click <strong>Done for Now</strong> when finished for this visit.</p>
+        <p class="hint-text">Draws add to this card's running total — it carries over week to week until they redeem or you close it out. Click any drawn ball below to remove that specific one, then click <strong>Submit</strong> when finished for this visit.</p>
       </form>
 
       <div id="digitalCagePanel" class="digital-cage-panel" hidden>
@@ -124,7 +124,7 @@
           <canvas id="ballCageCanvas" width="380" height="380"></canvas>
           <div class="ball-reveal-slot" id="ballRevealSlot"><span class="ball-reveal-placeholder">?</span></div>
         </div>
-        <button type="button" id="digitalDrawBtn" class="btn btn-primary btn-big">🎲 Draw a Ball</button>
+        <button type="button" id="digitalDrawBtn" class="btn btn-primary btn-big">Draw a Ball</button>
         <p class="hint-text"><span id="cageRemainingCount"></span> balls left in the cage for this card. Backup/showcase mode — the physical cage is still how customers play; this pulls the same way and feeds the same card either way.</p>
       </div>
 
@@ -201,10 +201,29 @@
     </div>
 
     <div class="panel-box">
-      <h2 class="section-heading">Customers to Re-Engage</h2>
-      <p class="hint-text">Played before, but nothing in over 3 weeks — worth a text to bring them back in. (Contact info is handled outside this app; this is just who and how long.)</p>
+      <div class="reengage-header">
+        <h2 class="section-heading">Customers to Re-Engage</h2>
+        <button type="button" id="clearAllReengageBtn" class="btn btn-ghost btn-sm">Mark All Texted</button>
+      </div>
+      <p class="hint-text">Played before, but nothing in over 3 weeks. Check a name off once you've texted them — after two texts they move to Dormant. (Contact info lives outside this app; this is just who and how long.)</p>
+
+      <div class="msg-template">
+        <div class="msg-template-head">
+          <span class="msg-template-label">Text template</span>
+          <button type="button" id="copyTemplateBtn" class="btn btn-ghost btn-sm">Copy</button>
+        </div>
+        <p class="msg-template-body" id="reengageTemplate"></p>
+      </div>
+
       <div class="top-players-list" id="reengageList"></div>
       <p id="noReengage" class="empty-state" hidden>Nobody's overdue — everyone active has played within 3 weeks.</p>
+    </div>
+
+    <div class="panel-box">
+      <h2 class="section-heading">Dormant Players</h2>
+      <p class="hint-text">Texted twice with no return, or quiet for 6+ weeks. They stay here for the record and drop back into the active lists automatically the moment they play again.</p>
+      <div class="top-players-list" id="dormantList"></div>
+      <p id="noDormant" class="empty-state" hidden>No dormant players.</p>
     </div>
   </section>
 
@@ -240,7 +259,7 @@
         <li>Made a mistake this visit? Click any drawn ball to remove just that one, or click <strong>Undo Last Draw</strong> for the most recent one. This works on any ball in their history, not just today's.</li>
         <li>Watch the <strong>Live Card Progress</strong> grid — matched numbers highlight green as you go, reflecting every ball ever drawn for that card, not just this visit.</li>
         <li>Click <strong>Done for Now / Next Customer</strong> once you're finished drawing for this visit — everything's already saved, so this just clears the screen for the next person. Their card stays exactly as it is until they come back.</li>
-        <li>The <strong>🎱 Physical Cage / 🎰 Digital Ball Cage</strong> toggle above the draw box switches to an animated on-screen cage with its own Draw button — a backup for if the real machine isn't available, or just a fun alternative. It draws the same way and updates the same card either way; switch back and forth anytime without losing anything.</li>
+        <li>The <strong>In-store / Digital Ball Cage</strong> toggle above the draw box switches to an animated on-screen cage with its own Draw button — a backup for if the real machine isn't available, or just a fun alternative. It draws the same way and updates the same card either way; switch back and forth anytime without losing anything.</li>
       </ol>
 
       <h2 class="help-title">Wins and Celebrations</h2>
@@ -294,7 +313,7 @@
       <blockquote class="script-quote">"Hey [Name], have you played RACBINGO yet? It's free, it takes two minutes, and every week you're with us you get a few more shots at winning real RAC Cash on the same card — no purchase required. Want to get your card started right now?"</blockquote>
 
       <p class="script-label">Announcing a win</p>
-      <blockquote class="script-quote">"Hold on — that's a BINGO! 🎉 You just won $[amount] in RAC Cash. I'm printing your certificate right now, so hang onto it and we'll get you set up whenever you're ready to use it."</blockquote>
+      <blockquote class="script-quote">"Hold on — that's a BINGO! You just won $[amount] in RAC Cash. I'm printing your certificate right now, so hang onto it and we'll get you set up whenever you're ready to use it."</blockquote>
 
       <p class="script-label">Pitching a bonus-draw promotion</p>
       <blockquote class="script-quote">"Since you're already playing, did you know if you put [X] down on an agreement today, you get [Y] bonus RACBINGO draws before you even leave? That's [Y]x the chances to walk out with RAC Cash."</blockquote>
@@ -363,12 +382,12 @@
 <div id="winModalOverlay" class="win-modal-overlay" hidden>
   <canvas id="fireworksCanvas"></canvas>
   <div class="win-modal-card">
-    <div class="win-modal-emoji">🎉</div>
+    
     <h2 id="winModalTitle">BINGO!</h2>
     <p id="winModalSubtitle"></p>
     <div class="win-modal-amount" id="winModalAmount"></div>
     <div class="win-modal-actions">
-      <button type="button" id="winModalPrintBtn" class="btn btn-ghost">Print Certificate 🖨</button>
+      <button type="button" id="winModalPrintBtn" class="btn btn-ghost">Print Certificate</button>
       <button type="button" id="winModalAckBtn" class="btn btn-primary btn-big">Continue Playing ▶</button>
     </div>
   </div>
@@ -417,13 +436,13 @@
 
     <div class="cert-footer-row">
       <div class="cert-thankyou-block">
-        <div class="cert-heart-icon">🤝</div>
+        
         <div id="certThankYou"></div>
       </div>
       <div class="cert-verify-block">
-        <div class="cert-verify-line">👤 Redeemed by: ______________________</div>
-        <div class="cert-verify-line">📅 Date: ______________________</div>
-        <div class="cert-verify-line">📄 Certificate ID: <span id="certId"></span></div>
+        <div class="cert-verify-line">Redeemed by: ______________________</div>
+        <div class="cert-verify-line">Date: ______________________</div>
+        <div class="cert-verify-line">Certificate ID: <span id="certId"></span></div>
       </div>
     </div>
 

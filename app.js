@@ -11,6 +11,12 @@
   // "played this week" (1 week idle is just normal pacing, not a lost
   // customer). Adjust here if 3 weeks turns out to be the wrong cutoff.
   const REENGAGEMENT_THRESHOLD_MS = 3 * WEEK_MS;
+  // Two texts is the whole outreach cycle: flagged at 3 weeks idle, texted,
+  // flagged again at 6, texted again. Still nothing after that and they
+  // move to Dormant so the active follow-up list stays short and useful
+  // instead of accumulating names nobody is really going to chase.
+  const MAX_REENGAGEMENT_NOTIFICATIONS = 2;
+  const DORMANT_THRESHOLD_MS = 6 * WEEK_MS;
 
   const PRIZES = { LINE: 25, CORNERS: 75, BLACKOUT: 100 };
   const TIER_KEYS = ["LINE", "CORNERS", "BLACKOUT"];
@@ -398,13 +404,14 @@
     saveData();
   }
 
-  // Only valid before any ball's been drawn this visit — once a ball is
-  // drawn it's saved permanently to the customer's ongoing game, so a full
-  // discard isn't safe anymore. A mistake caught after that gets corrected
-  // by removing the specific wrong balls (see removeDrawAtFor).
-  function cancelEmptyGame(customerId) {
+  // Fully discards the in-progress game (balls, unredeemed wins, week
+  // history) without archiving anything — the true escape hatch for a card
+  // started by mistake. The customer's card numbers themselves are kept
+  // (they still hold the physical card). Caller gates this behind a
+  // confirmation whenever there's anything at stake.
+  function cancelGame(customerId) {
     const customer = findCustomer(customerId);
-    if (!customer || !customer.activeGame || customer.activeGame.draws.length > 0) return;
+    if (!customer || !customer.activeGame) return;
     customer.activeGame = null;
     state.activeCustomerId = null;
     saveData();
@@ -442,7 +449,7 @@
       return false;
     }
     if (customer.activeGame.draws.includes(num)) {
-      errEl.textContent = `🔁 ${num} was already pulled for this card — reroll, draw again.`;
+      errEl.textContent = `${num} was already pulled for this card — reroll, draw again.`;
       errEl.classList.add("is-info");
       errEl.hidden = false;
       return false;
@@ -451,6 +458,9 @@
     customer.activeGame.draws.push(num);
     currentSessionFor(customer.activeGame).balls.push(num);
     customer.lastPlayedAt = Date.now();
+    // They came back — the outreach cycle starts fresh, so a future lapse
+    // gets its own two texts rather than being counted as already-chased.
+    customer.reengageNotifyCount = 0;
     checkForNewWinsFor(customer);
     saveData();
     return true;
@@ -502,17 +512,18 @@
   }
 
   // Ends the customer's current game — whether they're actually redeeming a
-  // win or just resetting with nothing won (the button wording adapts, the
-  // action is the same either way). Archives whatever accumulated to
-  // History as a closed, redeemed record, and clears the way for a new
+  // win or just resetting with nothing won. Archives whatever accumulated
+  // to History as a closed, redeemed record, and clears the way for a new
   // card. Reuses the game's own id as the archived round's id, so a
   // certificate printed mid-game and reprinted afterward shows the same
-  // Certificate ID.
+  // Certificate ID. Purely the data change — navigation/printing is
+  // orchestrated by the caller (see redeemAndCloseOut) so this stays
+  // reusable and testable on its own.
   function closeOutGame(customerId) {
     const customer = findCustomer(customerId);
-    if (!customer || !customer.activeGame) return;
+    if (!customer || !customer.activeGame) return null;
     const game = customer.activeGame;
-    state.history.unshift({
+    const archived = {
       id: game.id,
       customerId: customer.id,
       customerName: customer.name,
@@ -526,28 +537,64 @@
       weeksPlayed: game.sessionLog.length,
       redeemed: true,
       redeemedAt: Date.now()
-    });
+    };
+    state.history.unshift(archived);
     customer.activeGame = null;
     customer.card = emptyCard();
-    state.activeCustomerId = customerId;
     saveData();
-    switchTab("game");
+    return archived;
+  }
+
+  // Shared tail end of every redemption path, for uniformity: if there was
+  // a win, the certificate prints automatically (no extra click) — once
+  // that print dialog closes (afterprint fires either way, print or
+  // cancelled), staff is asked whether to start the customer's next card
+  // right now. Cancel is always available and just leaves things where
+  // they are; nothing about the redemption itself is undone by it.
+  function printThenPromptNewCard(customerId, customerName, wins, certKey) {
+    const promptForNewCard = () => {
+      showConfirm(`Start a new card for ${customerName} now?`, () => {
+        state.activeCustomerId = customerId;
+        saveData();
+        switchTab("game");
+        render();
+      });
+    };
+    if (wins.length > 0) {
+      printCertificate(customerName, wins, certKey);
+      window.addEventListener("afterprint", promptForNewCard, { once: true });
+    } else {
+      promptForNewCard();
+    }
+  }
+
+  // Ordinary redemption path, triggered from the live game screen's
+  // Redeem/Close Out button.
+  function redeemAndCloseOut(customerId) {
+    const customer = findCustomer(customerId);
+    if (!customer || !customer.activeGame) return;
+    const customerName = customer.name;
+    const archived = closeOutGame(customerId);
+    if (!archived) return;
+    state.activeCustomerId = null;
+    saveData();
     render();
+    printThenPromptNewCard(customerId, customerName, archived.wins, archived.id);
   }
 
   // Legacy path: redeems one of the rare leftover pending rounds that can
   // exist in History after the persistent-game migration's dual-pending
   // edge case (see migrateToPersistentGames). Ordinary redemption goes
-  // through closeOutGame instead.
+  // through redeemAndCloseOut instead — this follows the same
+  // print-then-prompt tail for uniformity.
   function confirmRedemption(roundId) {
     const round = state.history.find(r => r.id === roundId);
     if (!round) return;
     round.redeemed = true;
     round.redeemedAt = Date.now();
     saveData();
-    state.activeCustomerId = round.customerId;
-    switchTab("game");
     render();
+    printThenPromptNewCard(round.customerId, round.customerName, round.wins, round.id);
   }
 
   // ---------- Editing past rounds (mistake corrections) ----------
@@ -634,6 +681,7 @@
   // ---------- Rendering ----------
 
   function render() {
+    renderActivePlayersBadge();
     renderPlayRoundTab();
     renderRoster();
     renderHistory();
@@ -643,28 +691,27 @@
 
   function renderPlayRoundTab() {
     const picker = document.getElementById("customerPicker");
-    const activePlayersPanel = document.getElementById("activePlayersPanel");
+    const idleCagePanel = document.getElementById("idleCagePanel");
     const panel = document.getElementById("customerPanel");
     const active = document.getElementById("activeRound");
     const customer = state.activeCustomerId ? findCustomer(state.activeCustomerId) : null;
 
-    // Only the live-game view (below) ever needs the cage loop running —
-    // stop it here by default so it doesn't keep spinning in the
-    // background on every other screen, and let renderLiveGame restart it
-    // if the customer is actually mid-game in digital mode.
+    // Only the screen currently on display should be animating — each
+    // branch below turns on exactly the one loop it needs.
     stopCageAnimation();
+    stopIdleCage();
 
     if (!customer) {
       state.activeCustomerId = null;
       picker.hidden = false;
-      activePlayersPanel.hidden = false;
-      renderActivePlayersList();
+      idleCagePanel.hidden = false;
+      startIdleCage();
       panel.hidden = true;
       active.hidden = true;
       return;
     }
 
-    activePlayersPanel.hidden = true;
+    idleCagePanel.hidden = true;
 
     if (customer.activeGame) {
       picker.hidden = true;
@@ -680,50 +727,14 @@
     renderCustomerPanel();
   }
 
-  // Quick-access list of everyone currently mid-card, front and center on
-  // the Play Round home screen — staff shouldn't have to type a name just
-  // to get back to someone who's already playing.
-  function renderActivePlayersList() {
-    const list = document.getElementById("activePlayersList");
-    const empty = document.getElementById("noActivePlayers");
-    const players = state.customers.filter(c => c.activeGame);
-    players.sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0));
-
-    list.innerHTML = "";
-    empty.hidden = players.length !== 0;
-
-    players.forEach(customer => {
-      const game = customer.activeGame;
-      const hits = hitCountFor(customer, new Set(game.draws));
-      const done = playedThisWeek(customer);
-      const winTotal = roundTotal(game.wins);
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "active-player-row";
-      const nameEl = document.createElement("span");
-      nameEl.className = "active-player-name";
-      nameEl.textContent = customer.name;
-      if (disambiguatorFor(customer)) {
-        nameEl.textContent += ` #${customer.id.slice(-4).toUpperCase()}`;
-      }
-      const metaEl = document.createElement("span");
-      metaEl.className = "active-player-meta";
-      metaEl.textContent = `Week ${game.sessionLog.length} · ${hits}/24 toward Blackout · ${done ? "drawn this week ✓" : "needs this week's balls"}`;
-      if (winTotal > 0) {
-        const pendingSpan = document.createElement("span");
-        pendingSpan.className = "has-pending";
-        pendingSpan.textContent = ` · $${winTotal} pending`;
-        metaEl.appendChild(pendingSpan);
-      }
-      row.appendChild(nameEl);
-      row.appendChild(metaEl);
-      row.addEventListener("click", () => {
-        state.activeCustomerId = customer.id;
-        saveData();
-        render();
-      });
-      list.appendChild(row);
-    });
+  // Live count of everyone mid-card, shown in the top banner. The full
+  // list lives on the Roster tab — this is just an at-a-glance pulse of
+  // how much is in play right now.
+  function renderActivePlayersBadge() {
+    const badge = document.getElementById("activePlayersBadge");
+    const count = state.customers.filter(c => c.activeGame).length;
+    badge.hidden = count === 0;
+    badge.textContent = count === 1 ? "1 active player" : `${count} active players`;
   }
 
   function formatDate(ts) {
@@ -780,7 +791,7 @@
 
     const alertEl = document.getElementById("weeklyAlert");
     if (playedThisWeek(customer)) {
-      alertEl.textContent = `⚠️ ${customer.name} already played this week — last played ${formatDate(customer.lastPlayedAt)}.`;
+      alertEl.textContent = `${customer.name} already played this week — last played ${formatDate(customer.lastPlayedAt)}.`;
       alertEl.hidden = false;
     } else {
       alertEl.hidden = true;
@@ -940,18 +951,19 @@
     game.wins.forEach(w => {
       const row = document.createElement("div");
       row.className = "round-win-row";
-      row.textContent = `🏆 ${w.label} — $${w.prize} RACCASH`;
+      row.textContent = `${w.label} — $${w.prize} RACCASH`;
       winsList.appendChild(row);
     });
 
     // Cancel only discards a truly empty visit — once a ball's drawn it's
     // permanent, so per-ball removal (above) is the only way back.
-    document.getElementById("cancelRoundBtn").disabled = count > 0;
-
     const closeOutBtn = document.getElementById("closeOutGameBtn");
-    closeOutBtn.textContent = game.wins.length > 0
-      ? `Redeem $${roundTotal(game.wins)} & Start New Card`
-      : "Close Out & Start New Card";
+    const hasWin = game.wins.length > 0;
+    closeOutBtn.textContent = hasWin ? `Redeem $${roundTotal(game.wins)}` : "Close Out Card";
+    // Green for a real redemption (money moment), red outline for the
+    // destructive no-win reset.
+    closeOutBtn.classList.toggle("btn-success", hasWin);
+    closeOutBtn.classList.toggle("btn-danger-outline", !hasWin);
 
     renderReadOnlyGrid(document.getElementById("activeRoundGrid"), customer, new Set(game.draws));
   }
@@ -1128,7 +1140,7 @@
         btn.type = "button";
         btn.className = "reward-item";
         const total = roundTotal(round.wins);
-        btn.textContent = `🎁 $${total} — ${round.wins.map(w => w.label).join(", ")} — ${formatDate(round.startedAt)}`;
+        btn.textContent = `$${total} — ${round.wins.map(w => w.label).join(", ")} — ${formatDate(round.startedAt)}`;
         btn.addEventListener("click", () => goToRoundInHistory(round.id));
         rewardList.appendChild(btn);
       });
@@ -1137,7 +1149,7 @@
         btn.type = "button";
         btn.className = "reward-item reward-item-live";
         const total = roundTotal(customer.activeGame.wins);
-        btn.textContent = `🎁 $${total} pending — ${customer.activeGame.wins.map(w => w.label).join(", ")} — still playing`;
+        btn.textContent = `$${total} pending — ${customer.activeGame.wins.map(w => w.label).join(", ")} — still playing`;
         btn.addEventListener("click", () => {
           state.activeCustomerId = customer.id;
           saveData();
@@ -1304,7 +1316,7 @@
         const label = document.createElement("span");
         label.className = "win-row-label";
         const labels = round.wins.map(w => w.label).join(", ");
-        label.textContent = `🏆 ${labels} — $${roundTotal(round.wins)} total`;
+        label.textContent = `${labels} — $${roundTotal(round.wins)} total`;
         row.appendChild(label);
 
         const actions = document.createElement("span");
@@ -1313,7 +1325,7 @@
         const printBtn = document.createElement("button");
         printBtn.type = "button";
         printBtn.className = "btn btn-ghost btn-sm";
-        printBtn.textContent = "Print Certificate 🖨";
+        printBtn.textContent = "Print Certificate";
         printBtn.addEventListener("click", () => printCertificate(round.customerName, round.wins, round.id));
         actions.appendChild(printBtn);
 
@@ -1590,15 +1602,70 @@
   // played at all (they were never "engaged" to begin with, that's a
   // different problem than winning someone back). Actual texting happens
   // outside this app; this just answers "who, and how long."
-  function computeReengagementList() {
+  function notifyCountFor(customer) {
+    return customer.reengageNotifyCount || 0;
+  }
+
+  // Someone who's been texted the full cycle, or who's gone quiet past the
+  // dormant window regardless, drops off the active follow-up list.
+  function isDormant(customer) {
+    if (!customer.lastPlayedAt) return false;
+    const idleMs = Date.now() - customer.lastPlayedAt;
+    return notifyCountFor(customer) >= MAX_REENGAGEMENT_NOTIFICATIONS || idleMs >= DORMANT_THRESHOLD_MS;
+  }
+
+  function reengageCandidates() {
     return state.customers
-      .filter(c => c.lastPlayedAt && (Date.now() - c.lastPlayedAt) >= REENGAGEMENT_THRESHOLD_MS)
+      .filter(c => c.lastPlayedAt &&
+        (Date.now() - c.lastPlayedAt) >= REENGAGEMENT_THRESHOLD_MS &&
+        !isDormant(c))
+      .sort((a, b) => a.lastPlayedAt - b.lastPlayedAt);
+  }
+
+  function computeReengagementList() {
+    return reengageCandidates().map(c => ({
+      id: c.id,
+      name: c.name,
+      lastPlayedAt: c.lastPlayedAt,
+      notifyCount: notifyCountFor(c),
+      weeksSince: Math.floor((Date.now() - c.lastPlayedAt) / WEEK_MS)
+    }));
+  }
+
+  function computeDormantList() {
+    return state.customers
+      .filter(c => c.lastPlayedAt && isDormant(c))
       .sort((a, b) => a.lastPlayedAt - b.lastPlayedAt)
       .map(c => ({
+        id: c.id,
         name: c.name,
         lastPlayedAt: c.lastPlayedAt,
+        notifyCount: notifyCountFor(c),
         weeksSince: Math.floor((Date.now() - c.lastPlayedAt) / WEEK_MS)
       }));
+  }
+
+  // Checking a name off logs that a text went out and clears them from the
+  // list — either until they're due for the second one, or into Dormant if
+  // that was already their second.
+  function markReengagementNotified(customerId) {
+    const customer = findCustomer(customerId);
+    if (!customer) return;
+    customer.reengageNotifyCount = notifyCountFor(customer) + 1;
+    customer.reengageLastNotifiedAt = Date.now();
+    saveData();
+  }
+
+  function markAllReengagementNotified() {
+    reengageCandidates().forEach(c => {
+      c.reengageNotifyCount = notifyCountFor(c) + 1;
+      c.reengageLastNotifiedAt = Date.now();
+    });
+    saveData();
+  }
+
+  function reengagementMessageFor(name) {
+    return `Hi ${name}, it's Rent-A-Center Store ${STORE_NUMBER}. Your RAC BINGO card is still open and waiting — stop in this week and we'll pull your next numbers. Free to play, and there's real RAC Cash on the line. See you soon!`;
   }
 
   function statTile(value, label) {
@@ -1688,15 +1755,50 @@
     const reengage = computeReengagementList();
     const reengageList = document.getElementById("reengageList");
     const noReengage = document.getElementById("noReengage");
+    document.getElementById("reengageTemplate").textContent = reengagementMessageFor("[Name]");
+    document.getElementById("clearAllReengageBtn").disabled = reengage.length === 0;
     reengageList.innerHTML = "";
     noReengage.hidden = reengage.length !== 0;
     reengage.forEach(r => {
+      const row = document.createElement("label");
+      row.className = "top-player-row reengage-row";
+
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "reengage-check";
+      check.title = `Mark ${r.name} as texted`;
+      check.addEventListener("change", () => {
+        markReengagementNotified(r.id);
+        render();
+      });
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "top-player-name";
+      nameEl.textContent = r.name;
+
+      const statsEl = document.createElement("span");
+      statsEl.className = "top-player-stats";
+      const texted = r.notifyCount === 1 ? " · texted once" : "";
+      statsEl.textContent = `${r.weeksSince} week${r.weeksSince === 1 ? "" : "s"} since last played (${formatDate(r.lastPlayedAt)})${texted}`;
+
+      row.appendChild(check);
+      row.appendChild(nameEl);
+      row.appendChild(statsEl);
+      reengageList.appendChild(row);
+    });
+
+    const dormant = computeDormantList();
+    const dormantList = document.getElementById("dormantList");
+    const noDormant = document.getElementById("noDormant");
+    dormantList.innerHTML = "";
+    noDormant.hidden = dormant.length !== 0;
+    dormant.forEach(d => {
       const row = document.createElement("div");
       row.className = "top-player-row";
       row.innerHTML = `
-        <span class="top-player-name">${escapeHtml(r.name)}</span>
-        <span class="top-player-stats">${r.weeksSince} week${r.weeksSince === 1 ? "" : "s"} since last played (${formatDate(r.lastPlayedAt)})</span>`;
-      reengageList.appendChild(row);
+        <span class="top-player-name">${escapeHtml(d.name)}</span>
+        <span class="top-player-stats">${d.weeksSince} week${d.weeksSince === 1 ? "" : "s"} idle · ${d.notifyCount} text${d.notifyCount === 1 ? "" : "s"} sent</span>`;
+      dormantList.appendChild(row);
     });
   }
 
@@ -1814,8 +1916,8 @@
   const BALL_COLORS = { B: "#2ea043", I: "#c8102e", N: "#2b6cb0", G: "#d4a017", O: "#7c3aed" };
   // Slow enough that staff can visually track one specific ball as it
   // bounces, not just a blur of motion.
-  const CAGE_BALL_SPEED_MIN = 0.3;
-  const CAGE_BALL_SPEED_RANGE = 0.5;
+  const CAGE_BALL_SPEED_MIN = 0.12;
+  const CAGE_BALL_SPEED_RANGE = 0.22;
 
   function randomCageSpeed() {
     return CAGE_BALL_SPEED_MIN + Math.random() * CAGE_BALL_SPEED_RANGE;
@@ -1852,9 +1954,9 @@
     });
   }
 
-  function stepCage() {
-    const canvas = document.getElementById("ballCageCanvas");
-    if (!canvas) { cageAnimId = null; return; }
+  // One frame of cage physics + paint, shared by the live drawing cage and
+  // the idle/screensaver cage so they can never drift apart visually.
+  function drawCageFrame(canvas, balls) {
     const ctx = canvas.getContext("2d");
     const w = canvas.width, h = canvas.height;
     const cx = w / 2, cy = h / 2, cageRadius = Math.min(w, h) / 2 - 16;
@@ -1866,7 +1968,7 @@
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    cageBalls.forEach(b => {
+    balls.forEach(b => {
       b.x += b.vx;
       b.y += b.vy;
       const dx = b.x - cx, dy = b.y - cy;
@@ -1893,13 +1995,62 @@
       ctx.textBaseline = "middle";
       ctx.fillText(b.num, b.x, b.y);
     });
+  }
 
+  function stepCage() {
+    const canvas = document.getElementById("ballCageCanvas");
+    if (!canvas) { cageAnimId = null; return; }
+    drawCageFrame(canvas, cageBalls);
     cageAnimId = requestAnimationFrame(stepCage);
   }
 
   function stopCageAnimation() {
     if (cageAnimId) cancelAnimationFrame(cageAnimId);
     cageAnimId = null;
+  }
+
+  // Ambient full-75 cage on the Play Round home screen: doubles as a
+  // "come play" invitation and a passive screensaver while the register
+  // sits idle. Purely decorative — it never draws or records anything.
+  let idleCageBalls = [];
+  let idleCageAnimId = null;
+
+  function stepIdleCage() {
+    const canvas = document.getElementById("idleCageCanvas");
+    if (!canvas) { idleCageAnimId = null; return; }
+    drawCageFrame(canvas, idleCageBalls);
+    idleCageAnimId = requestAnimationFrame(stepIdleCage);
+  }
+
+  function startIdleCage() {
+    if (idleCageAnimId) return;
+    const canvas = document.getElementById("idleCageCanvas");
+    if (!canvas) return;
+    if (idleCageBalls.length === 0) {
+      const cx = canvas.width / 2, cy = canvas.height / 2;
+      const cageRadius = Math.min(canvas.width, canvas.height) / 2 - 16;
+      for (let n = 1; n <= 75; n++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * (cageRadius - 12);
+        const speed = randomCageSpeed();
+        const dir = Math.random() * Math.PI * 2;
+        idleCageBalls.push({
+          num: n,
+          x: cx + Math.cos(angle) * dist,
+          y: cy + Math.sin(angle) * dist,
+          vx: Math.cos(dir) * speed,
+          vy: Math.sin(dir) * speed,
+          radius: 11,
+          color: BALL_COLORS[columnForNumber(n)]
+        });
+      }
+    }
+    stepIdleCage();
+  }
+
+  function stopIdleCage() {
+    if (idleCageAnimId) cancelAnimationFrame(idleCageAnimId);
+    idleCageAnimId = null;
   }
 
   function showRevealedBall(ball) {
@@ -2002,7 +2153,7 @@
     document.querySelectorAll("#certBills .cert-bill-img").forEach(img => {
       img.addEventListener("error", () => {
         const amount = img.alt.match(/\$\d+/);
-        img.outerHTML = `<div class="cert-bill-missing">⚠ RAC CASH ${amount ? amount[0] : ""} bill graphic could not be loaded — do not redeem until this is fixed.</div>`;
+        img.outerHTML = `<div class="cert-bill-missing">RAC CASH ${amount ? amount[0] : ""} bill graphic could not be loaded — do not redeem until this is fixed.</div>`;
       }, { once: true });
     });
     document.getElementById("certMedal").hidden = !info.isGrand;
@@ -2070,14 +2221,14 @@
           </div>
         </div>
         <div class="cf-info-row">
-          <div class="cf-info"><span class="cf-info-icon">👤</span><div><div class="cf-info-label">CUSTOMER NAME</div><div class="cf-info-value">${escapeHtml(customer.name)}</div></div></div>
-          <div class="cf-info"><span class="cf-info-icon">📅</span><div><div class="cf-info-label">ISSUE DATE</div><div class="cf-info-value">${dateStr}</div></div></div>
-          <div class="cf-info"><span class="cf-info-icon">🪪</span><div><div class="cf-info-label">CARD ID</div><div class="cf-info-value">${cardIdFor(customer)}</div></div></div>
+          <div class="cf-info"><span class="cf-info-icon"></span><div><div class="cf-info-label">CUSTOMER NAME</div><div class="cf-info-value">${escapeHtml(customer.name)}</div></div></div>
+          <div class="cf-info"><span class="cf-info-icon"></span><div><div class="cf-info-label">ISSUE DATE</div><div class="cf-info-value">${dateStr}</div></div></div>
+          <div class="cf-info"><span class="cf-info-icon"></span><div><div class="cf-info-label">CARD ID</div><div class="cf-info-value">${cardIdFor(customer)}</div></div></div>
         </div>
         <div class="cf-grid">${cardGridHTMLBranded(customer)}</div>
         <div class="cf-footer">
-          <span>📅 PLAY WEEKLY</span>
-          <span>💵 EARN RAC CASH</span>
+          <span>PLAY WEEKLY</span>
+          <span>EARN RAC CASH</span>
           <span>★ STAY CURRENT</span>
           <span class="cf-footer-note">OFFICIAL STORE GAME CARD<br>PROPERTY OF RENT-A-CENTER</span>
         </div>
@@ -2095,7 +2246,7 @@
         <div class="cb-steps">
           <div class="cb-step">
             <div class="cb-step-num">1</div>
-            <div class="cb-step-icon">🏪</div>
+            
             <div class="cb-step-text"><strong>VISIT WEEKLY</strong><span>Visit once each calendar week.</span></div>
           </div>
           <div class="cb-step">
@@ -2107,7 +2258,7 @@
           </div>
           <div class="cb-step">
             <div class="cb-step-num">3</div>
-            <div class="cb-step-icon">🗂️</div>
+            
             <div class="cb-step-text"><strong>BUILD YOUR CARD</strong><span>Matching numbers remain marked.</span></div>
           </div>
         </div>
@@ -2117,34 +2268,34 @@
           <div class="cb-win-box">
             <div class="cb-mini-grid corners">${"<i></i>".repeat(16)}</div>
             <div class="cb-win-label">FOUR CORNERS</div>
-            <div class="cb-win-amount">🏆 $${PRIZES.CORNERS}</div>
+            <div class="cb-win-amount">$${PRIZES.CORNERS}</div>
           </div>
           <div class="cb-win-box">
             <div class="cb-mini-grid line">${"<i></i>".repeat(5)}</div>
             <div class="cb-win-label">SINGLE LINE</div>
-            <div class="cb-win-amount">🏆 $${PRIZES.LINE}</div>
+            <div class="cb-win-amount">$${PRIZES.LINE}</div>
           </div>
           <div class="cb-win-box">
             <div class="cb-mini-grid full">${"<i></i>".repeat(16)}</div>
             <div class="cb-win-label">FULL BINGO</div>
-            <div class="cb-win-amount">🏆 $${PRIZES.BLACKOUT}</div>
+            <div class="cb-win-amount">$${PRIZES.BLACKOUT}</div>
           </div>
         </div>
 
         <div class="cb-rules-row">
           <div class="cb-section-title small">QUICK RULES</div>
           <ul class="cb-rules">
-            <li>✅ Participation is FREE</li>
-            <li>✅ Stay current to participate</li>
-            <li>✅ One play each week</li>
-            <li>✅ Card remains in store</li>
-            <li>✅ Manager verifies prizes</li>
+            <li>Participation is FREE</li>
+            <li>Stay current to participate</li>
+            <li>One play each week</li>
+            <li>Card remains in store</li>
+            <li>Manager verifies prizes</li>
           </ul>
         </div>
 
         <div class="cb-footer">
           <div class="cb-thankyou">Thank You<span>FOR PLAYING! SEE YOU NEXT WEEK.</span></div>
-          <div class="cb-contact">📍 ${STORE_ADDRESS}<br>📞 ${STORE_PHONE}</div>
+          <div class="cb-contact">${STORE_ADDRESS}<br>${STORE_PHONE}</div>
           <div class="cb-legal">Participation subject to official program rules.</div>
         </div>
       </div>`;
@@ -2373,21 +2524,41 @@
     render();
   });
 
-  // Only enabled while nothing's been drawn yet this visit (see
-  // renderLiveGame) — nothing at stake, so no confirmation needed either.
+  // Always available: with nothing drawn there's nothing at stake, so it
+  // just closes the empty game; with balls on the card it's a real
+  // discard, so it warns exactly what's being thrown away first.
   document.getElementById("cancelRoundBtn").addEventListener("click", () => {
-    if (state.activeCustomerId) cancelEmptyGame(state.activeCustomerId);
-    render();
+    const customer = findCustomer(state.activeCustomerId);
+    if (!customer || !customer.activeGame) return;
+    const game = customer.activeGame;
+    if (game.draws.length === 0) {
+      cancelGame(customer.id);
+      render();
+      return;
+    }
+    const total = roundTotal(game.wins);
+    const winWarning = total > 0 ? ` and their unredeemed $${total} in wins` : "";
+    showConfirm(`Cancel ${customer.name}'s in-progress card? This permanently discards all ${game.draws.length} drawn ball${game.draws.length === 1 ? "" : "s"}${winWarning} — nothing is archived to History. This cannot be undone.`, () => {
+      cancelGame(customer.id);
+      render();
+    });
   });
 
   document.getElementById("closeOutGameBtn").addEventListener("click", () => {
     const customer = findCustomer(state.activeCustomerId);
     if (!customer || !customer.activeGame) return;
     const total = roundTotal(customer.activeGame.wins);
-    const message = total > 0
-      ? `Redeem $${total} RACCASH for ${customer.name} and start them on a brand new card? This closes out their current game.`
-      : `Close out ${customer.name}'s current card with no win and start them on a brand new one? This cannot be undone.`;
-    showConfirm(message, () => closeOutGame(customer.id));
+    if (total > 0) {
+      // A win prints its own certificate automatically right after this —
+      // that's the confirmation moment, no extra dialog needed first.
+      redeemAndCloseOut(customer.id);
+    } else {
+      // Nothing to print here, so this stays as the one confirmation
+      // before an otherwise-irreversible reset.
+      showConfirm(`Close out ${customer.name}'s current card with no win? This resets their card and cannot be undone.`, () => {
+        redeemAndCloseOut(customer.id);
+      });
+    }
   });
 
   document.getElementById("trendFilterRow").addEventListener("click", e => {
@@ -2396,6 +2567,24 @@
     analyticsTrendMode = btn.dataset.mode;
     document.querySelectorAll("#trendFilterRow .chart-filter-btn").forEach(b => b.classList.toggle("active", b === btn));
     renderAnalyticsTab();
+  });
+
+  document.getElementById("clearAllReengageBtn").addEventListener("click", () => {
+    const pending = computeReengagementList();
+    if (pending.length === 0) return;
+    showConfirm(
+      `Mark all ${pending.length} customer${pending.length === 1 ? "" : "s"} as texted? Anyone already on their second text moves to Dormant.`,
+      () => { markAllReengagementNotified(); render(); }
+    );
+  });
+
+  document.getElementById("copyTemplateBtn").addEventListener("click", () => {
+    const text = document.getElementById("reengageTemplate").textContent;
+    const btn = document.getElementById("copyTemplateBtn");
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = "Copied";
+      setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+    }).catch(() => showAlert("Couldn't copy automatically — select the text and copy it manually."));
   });
 
   document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
