@@ -232,6 +232,37 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   white-space: nowrap;
 }
 
+/* Active players list (Play Round home screen) */
+.active-players-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.active-player-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+.active-player-row:hover, .active-player-row:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+.active-player-name { font-weight: 700; font-size: 1rem; }
+.active-player-meta { font-size: 0.8rem; color: var(--text-dim); }
+.active-player-meta .has-pending { color: var(--win); font-weight: 700; }
+
 .customer-panel-header {
   display: flex;
   justify-content: space-between;

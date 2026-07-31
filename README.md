@@ -28,13 +28,19 @@ handles more than one trusted machine.
 
 ## How it works
 
-- **Find or add a customer** — type a name in the search box on the Play Round tab. Existing
-  customers show up as you type (with a "played this week" badge if relevant); if there's no
-  match, an "Add as new customer" option appears. Selecting a returning customer with a card
-  already in progress jumps straight into it — their full ball history and card marks are
-  right there, picking up exactly where they left off. Selecting a customer with no game in
+- **Find or add a customer** — type a name in the search box on the Play Round tab; matches
+  show up as you type (with a "played this week" badge if relevant), click one to select it.
+  Press **Enter** instead of clicking to jump straight in: an exact (or single unambiguous
+  partial) name match selects that customer immediately, and no match at all pops up an
+  **Add as new customer?** confirmation. Selecting a returning customer with a card already
+  in progress jumps straight into it — their full ball history and card marks are right
+  there, picking up exactly where they left off. Selecting a customer with no game in
   progress (brand new, or their last game was just closed out) shows a **Their Last
   Completed Game** summary for reference, then the card setup screen.
+- **Active Players** — the Play Round home screen also lists everyone currently mid-card
+  right below the search bar (week number, balls drawn, Blackout progress, whether they've
+  drawn this week yet), sorted most-recently-played first. One click jumps straight into
+  their live game — no typing needed for someone who's already playing.
 - **Set up a card** — a customer needs a complete set of 24 numbers (5 per column, center is
   always free) before a game can start. Click **Generate Random Card** to have the app deal a
   valid card automatically (5 unique numbers per column, drawn from that column's official
@@ -64,7 +70,9 @@ handles more than one trusted machine.
   ("reroll — draw another ball") without losing any progress. A live, read-only card grid on
   the Play Round screen highlights every match so far, and the full draw history stays
   visible. Click any drawn ball to remove just that one (works on any past ball, not just
-  today's), or click "Undo Last Draw" for the most recent.
+  today's), or click "Undo Last Draw" for the most recent. The number field is focused
+  automatically the moment a customer's live game appears — start typing the next ball
+  right away, no need to click into the box first.
 - **Done for Now vs. Cancel** — "Done for Now / Next Customer" just steps away from this
   customer; nothing to discard, every draw is already saved. "Cancel" is only available
   before any ball's been drawn this visit (it fully discards an empty game started by

@@ -634,6 +634,7 @@
 
   function renderPlayRoundTab() {
     const picker = document.getElementById("customerPicker");
+    const activePlayersPanel = document.getElementById("activePlayersPanel");
     const panel = document.getElementById("customerPanel");
     const active = document.getElementById("activeRound");
     const customer = state.activeCustomerId ? findCustomer(state.activeCustomerId) : null;
@@ -641,10 +642,14 @@
     if (!customer) {
       state.activeCustomerId = null;
       picker.hidden = false;
+      activePlayersPanel.hidden = false;
+      renderActivePlayersList();
       panel.hidden = true;
       active.hidden = true;
       return;
     }
+
+    activePlayersPanel.hidden = true;
 
     if (customer.activeGame) {
       picker.hidden = true;
@@ -658,6 +663,49 @@
     panel.hidden = false;
     active.hidden = true;
     renderCustomerPanel();
+  }
+
+  // Quick-access list of everyone currently mid-card, front and center on
+  // the Play Round home screen — staff shouldn't have to type a name just
+  // to get back to someone who's already playing.
+  function renderActivePlayersList() {
+    const list = document.getElementById("activePlayersList");
+    const empty = document.getElementById("noActivePlayers");
+    const players = state.customers.filter(c => c.activeGame);
+    players.sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0));
+
+    list.innerHTML = "";
+    empty.hidden = players.length !== 0;
+
+    players.forEach(customer => {
+      const game = customer.activeGame;
+      const hits = hitCountFor(customer, new Set(game.draws));
+      const done = playedThisWeek(customer);
+      const winTotal = roundTotal(game.wins);
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "active-player-row";
+      const nameEl = document.createElement("span");
+      nameEl.className = "active-player-name";
+      nameEl.textContent = customer.name;
+      const metaEl = document.createElement("span");
+      metaEl.className = "active-player-meta";
+      metaEl.textContent = `Week ${game.sessionLog.length} · ${hits}/24 toward Blackout · ${done ? "drawn this week ✓" : "needs this week's balls"}`;
+      if (winTotal > 0) {
+        const pendingSpan = document.createElement("span");
+        pendingSpan.className = "has-pending";
+        pendingSpan.textContent = ` · $${winTotal} pending`;
+        metaEl.appendChild(pendingSpan);
+      }
+      row.appendChild(nameEl);
+      row.appendChild(metaEl);
+      row.addEventListener("click", () => {
+        state.activeCustomerId = customer.id;
+        saveData();
+        render();
+      });
+      list.appendChild(row);
+    });
   }
 
   function formatDate(ts) {
@@ -821,8 +869,15 @@
     // 75 is the natural ceiling (every number already called) — the
     // duplicate-draw check makes this practically self-limiting anyway.
     const gameFull = count >= 75;
-    document.getElementById("drawInput").disabled = gameFull;
+    const drawInput = document.getElementById("drawInput");
+    drawInput.disabled = gameFull;
     document.querySelector("#drawForm button[type=submit]").disabled = gameFull;
+    // Staff should be able to type the next ball immediately without
+    // clicking into the box first — refocus it on every render of this
+    // screen, unless a modal is up front (win celebration or a confirm).
+    const modalOpen = !document.getElementById("winModalOverlay").hidden ||
+      !document.getElementById("confirmModalOverlay").hidden;
+    if (!gameFull && !modalOpen) drawInput.focus();
 
     const winsWrap = document.getElementById("roundWinsWrap");
     const winsList = document.getElementById("roundWinsList");
@@ -1785,6 +1840,30 @@
   document.addEventListener("click", e => {
     const results = document.getElementById("customerSearchResults");
     if (!results.contains(e.target) && e.target !== searchInput) results.hidden = true;
+  });
+
+  // Enter jumps straight in without needing to click a suggestion: an exact
+  // (or single unambiguous partial) name match selects that customer;
+  // anything else offers to add the typed name as a new customer.
+  function selectCustomerAndClearSearch(customer) {
+    state.activeCustomerId = customer.id;
+    saveData();
+    searchInput.value = "";
+    document.getElementById("customerSearchResults").hidden = true;
+    render();
+  }
+  searchInput.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const query = searchInput.value.trim();
+    if (!query) return;
+    const exact = state.customers.find(c => c.name.toLowerCase() === query.toLowerCase());
+    if (exact) { selectCustomerAndClearSearch(exact); return; }
+    const partial = matchingCustomers(query);
+    if (partial.length === 1) { selectCustomerAndClearSearch(partial[0]); return; }
+    showConfirm(`No customer found named "${query}". Add them as a new customer?`, () => {
+      selectCustomerAndClearSearch(addCustomer(query));
+    });
   });
 
   document.getElementById("changeCustomerBtn").addEventListener("click", () => {

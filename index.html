@@ -49,9 +49,15 @@
     <div id="customerPicker" class="panel-box">
       <h2 class="section-heading">Find or Add Customer</h2>
       <div class="search-wrap">
-        <input type="text" id="customerSearchInput" placeholder="Type a name to search or add..." autocomplete="off">
+        <input type="text" id="customerSearchInput" placeholder="Type a name to search, or press Enter to search/add..." autocomplete="off">
         <div id="customerSearchResults" class="search-results" hidden></div>
       </div>
+    </div>
+
+    <div id="activePlayersPanel" class="panel-box" hidden>
+      <h2 class="section-heading">Active Players</h2>
+      <div class="active-players-list" id="activePlayersList"></div>
+      <p id="noActivePlayers" class="empty-state" hidden>No customers currently mid-card — search above to start someone new.</p>
     </div>
 
     <div id="customerPanel" class="panel-box" hidden>
