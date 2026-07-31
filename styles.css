@@ -231,6 +231,12 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   border-radius: 999px;
   white-space: nowrap;
 }
+.search-disambiguator {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-style: italic;
+  white-space: nowrap;
+}
 
 /* Active players list (Play Round home screen) */
 .active-players-list {
@@ -334,6 +340,8 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
   gap: 8px;
   margin: 16px 0 20px;
   min-height: 44px;
+  max-height: 220px;
+  overflow-y: auto;
 }
 .drawn-balls .ball-chip {
   width: 44px;

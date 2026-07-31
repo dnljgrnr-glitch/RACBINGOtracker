@@ -688,6 +688,9 @@
       const nameEl = document.createElement("span");
       nameEl.className = "active-player-name";
       nameEl.textContent = customer.name;
+      if (disambiguatorFor(customer)) {
+        nameEl.textContent += ` #${customer.id.slice(-4).toUpperCase()}`;
+      }
       const metaEl = document.createElement("span");
       metaEl.className = "active-player-meta";
       metaEl.textContent = `Week ${game.sessionLog.length} · ${hits}/24 toward Blackout · ${done ? "drawn this week ✓" : "needs this week's balls"}`;
@@ -904,6 +907,18 @@
 
   // ---------- Customer search ----------
 
+  // With hundreds of customers, two people can share a name — this gives
+  // staff something to tell them apart by (when it never was played this
+  // week, otherwise the existing badge already does the job) instead of
+  // guessing which "John Smith" they meant.
+  function disambiguatorFor(customer) {
+    const dupes = state.customers.filter(c => c.name.toLowerCase() === customer.name.toLowerCase());
+    if (dupes.length < 2) return null;
+    return customer.lastPlayedAt
+      ? `Last played ${formatDate(customer.lastPlayedAt)}`
+      : `Never played · #${customer.id.slice(-4).toUpperCase()}`;
+  }
+
   function matchingCustomers(query) {
     const q = query.trim().toLowerCase();
     let list = state.customers.slice();
@@ -945,6 +960,13 @@
       const nameSpan = document.createElement("span");
       nameSpan.textContent = c.name;
       row.appendChild(nameSpan);
+      const dis = disambiguatorFor(c);
+      if (dis) {
+        const disSpan = document.createElement("span");
+        disSpan.className = "search-disambiguator";
+        disSpan.textContent = dis;
+        row.appendChild(disSpan);
+      }
       if (playedThisWeek(c)) {
         const badge = document.createElement("span");
         badge.className = "search-badge";
@@ -1857,8 +1879,15 @@
     e.preventDefault();
     const query = searchInput.value.trim();
     if (!query) return;
-    const exact = state.customers.find(c => c.name.toLowerCase() === query.toLowerCase());
-    if (exact) { selectCustomerAndClearSearch(exact); return; }
+    const exactMatches = state.customers.filter(c => c.name.toLowerCase() === query.toLowerCase());
+    if (exactMatches.length === 1) { selectCustomerAndClearSearch(exactMatches[0]); return; }
+    if (exactMatches.length > 1) {
+      // More than one customer shares this exact name — don't guess which
+      // one they meant. Leave the type-ahead dropdown open (it shows a
+      // disambiguator for each) so they can click the right one.
+      renderSearchResults();
+      return;
+    }
     const partial = matchingCustomers(query);
     if (partial.length === 1) { selectCustomerAndClearSearch(partial[0]); return; }
     showConfirm(`No customer found named "${query}". Add them as a new customer?`, () => {
