@@ -2062,24 +2062,7 @@
   // customer up — deliberately wired to nothing. No customer, no card, no
   // save; it only ever touches idleCageBalls and its own tray.
 
-  // Ramp surfaces the ball rolls down, as line segments on the track canvas.
-  const TRACK_RAMPS = [
-    [[28, 45], [300, 85]],
-    [[312, 112], [40, 152]],
-    [[28, 178], [172, 208]]
-  ];
-  const TRACK_BALL_R = 11;
-  // Ball-center waypoints: alternating short falls and longer rolls, ending
-  // in a drop off the bottom edge into the tray below.
-  const TRACK_PATH = [
-    { from: [38, -20], to: [38, 35], ms: 180, roll: false },
-    { from: [38, 35], to: [300, 74], ms: 420, roll: true },
-    { from: [300, 74], to: [308, 101], ms: 130, roll: false },
-    { from: [308, 101], to: [44, 141], ms: 420, roll: true },
-    { from: [44, 141], to: [36, 167], ms: 130, roll: false },
-    { from: [36, 167], to: [172, 197], ms: 300, roll: true },
-    { from: [172, 197], to: [172, 250], ms: 200, roll: false }
-  ];
+  const PULL_FLIGHT_MS = 780;
 
   let idleDrawnNumbers = [];
   let idlePullInFlight = false;
@@ -2116,75 +2099,61 @@
     }
   }
 
-  function drawIdleTrack(ball) {
-    const canvas = document.getElementById("idleTrackCanvas");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Lifts the pulled ball out of the cage and arcs it down into the reveal
+  // slot, growing as it comes forward. Mirrors the reveal the real digital
+  // cage already uses, so a practice pull looks like the genuine article.
+  function animatePullFlight(ballMeta, onDone) {
+    const panel = document.getElementById('idleCagePanel');
+    const cage = document.getElementById('idleCageCanvas');
+    const slot = document.getElementById('idleRevealSlot');
+    if (!panel || !cage || !slot) { onDone(); return; }
 
-    ctx.lineCap = "round";
-    TRACK_RAMPS.forEach(([[x1, y1], [x2, y2]]) => {
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.strokeStyle = "rgba(255,255,255,0.16)";
-      ctx.lineWidth = 7;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.strokeStyle = "rgba(255,183,3,0.5)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    });
+    const panelBox = panel.getBoundingClientRect();
+    const cageBox = cage.getBoundingClientRect();
+    const slotBox = slot.getBoundingClientRect();
+    const from = {
+      x: cageBox.left - panelBox.left + cageBox.width / 2,
+      y: cageBox.top - panelBox.top + cageBox.height / 2
+    };
+    const to = {
+      x: slotBox.left - panelBox.left + slotBox.width / 2,
+      y: slotBox.top - panelBox.top + slotBox.height / 2
+    };
 
-    if (!ball) return;
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, TRACK_BALL_R, 0, Math.PI * 2);
-    ctx.fillStyle = ball.color;
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.8)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 10px -apple-system, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ball.num, ball.x, ball.y);
-  }
+    const el = document.createElement('div');
+    el.className = 'pull-flight-ball';
+    el.style.background = ballMeta.color;
+    el.textContent = ballMeta.num;
+    panel.appendChild(el);
 
-  function animateTrackBall(ballMeta, onDone) {
-    let seg = 0;
-    let segStart = performance.now();
+    const startSize = 22, endSize = 74;
+    const arc = Math.max(70, (to.y - from.y) * 0.45);
+    const start = performance.now();
 
     function frame(now) {
-      const s = TRACK_PATH[seg];
-      let t = Math.min(1, (now - segStart) / s.ms);
-      // Falls accelerate, rolls glide — enough to read as gravity without
-      // pretending to be a physics engine.
-      const eased = s.roll ? t : t * t;
-      const x = s.from[0] + (s.to[0] - s.from[0]) * eased;
-      const y = s.from[1] + (s.to[1] - s.from[1]) * eased;
-      drawIdleTrack({ x, y, num: ballMeta.num, color: ballMeta.color });
+      const t = Math.min(1, (now - start) / PULL_FLIGHT_MS);
+      // Ease-out so it leaves the cage quickly then settles into the slot.
+      const e = 1 - Math.pow(1 - t, 2.2);
+      const size = startSize + (endSize - startSize) * e;
+      const x = from.x + (to.x - from.x) * e;
+      // Parabolic lift, so it rises out of the cage before dropping in.
+      const y = from.y + (to.y - from.y) * e - arc * 4 * e * (1 - e);
+      el.style.width = size + 'px';
+      el.style.height = size + 'px';
+      el.style.fontSize = (size * 0.4) + 'px';
+      el.style.left = (x - size / 2) + 'px';
+      el.style.top = (y - size / 2) + 'px';
+      el.style.transform = 'rotate(' + (e * 420) + 'deg)';
 
-      if (t >= 1) {
-        seg++;
-        segStart = now;
-        if (seg < TRACK_PATH.length) {
-          // Contact with the next ramp: tick + a short haptic tap.
-          if (TRACK_PATH[seg].roll) {
-            playTick(520 + seg * 60, 0.06, 0.05);
-            buzz(10);
-          }
-        } else {
-          playTick(880, 0.16, 0.07);
-          buzz(22);
-          drawIdleTrack(null);
-          onDone();
-          return;
-        }
+      if (t < 1) {
+        requestAnimationFrame(frame);
+        return;
       }
-      requestAnimationFrame(frame);
+      el.remove();
+      slot.innerHTML = '<div class=\"revealed-ball\" style=\"background:' + ballMeta.color + '\">' + ballMeta.num + '</div>';
+      playTick(880, 0.16, 0.07);
+      buzz(22);
+      onDone();
     }
     requestAnimationFrame(frame);
   }
@@ -2214,7 +2183,7 @@
     playTick(320, 0.05, 0.045);
     buzz(14);
 
-    animateTrackBall(picked, () => {
+    animatePullFlight(picked, () => {
       idleDrawnNumbers.push(picked.num);
       renderIdleDrawnTray(picked.num);
       idlePullInFlight = false;
@@ -2223,11 +2192,15 @@
     });
   }
 
-  // Repaints the static track and syncs the two buttons — called whenever
-  // the idle screen comes back into view, since a mid-flight pull can't
-  // survive navigating away.
+  function resetIdleRevealSlot() {
+    const slot = document.getElementById("idleRevealSlot");
+    if (slot) slot.innerHTML = '<span class="ball-reveal-placeholder">?</span>';
+  }
+
+  // Syncs the practice controls whenever the idle screen comes back into
+  // view. The last pulled ball stays in the slot so it still reads as the
+  // most recent result after navigating away and back.
   function renderIdlePracticeArea() {
-    if (!idlePullInFlight) drawIdleTrack(null);
     renderIdleDrawnTray(null);
     document.getElementById("idlePullBtn").disabled = idlePullInFlight || idleCageBalls.length === 0;
     document.getElementById("idleResetBtn").disabled = idleDrawnNumbers.length === 0;
@@ -2237,7 +2210,7 @@
     idleCageBalls = [];
     idleDrawnNumbers = [];
     renderIdleDrawnTray(null);
-    drawIdleTrack(null);
+    resetIdleRevealSlot();
     stopIdleCage();
     startIdleCage();
     document.getElementById("idlePullBtn").disabled = false;

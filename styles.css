@@ -176,7 +176,21 @@ main { max-width: 900px; margin: 0 auto; padding: 20px; padding-bottom: 80px; }
   height: auto;
 }
 .idle-cage-caption { margin: 0; text-align: center; }
-#idleTrackCanvas { max-width: 100%; height: auto; }
+/* Anchors the in-flight pulled ball, which is positioned against this panel. */
+.idle-cage-panel { position: relative; }
+.pull-flight-ball {
+  position: absolute;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 900;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 5;
+}
 .idle-draw-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .idle-drawn-tray {
   display: flex;
