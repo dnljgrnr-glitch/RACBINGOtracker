@@ -141,6 +141,14 @@ handles more than one trusted machine.
   for record-keeping, and re-import a JSON backup at any time. Import checks the file's shape
   before touching your data, and runs the same migration as a normal app load, so restoring
   an older backup doesn't reintroduce the old weekly-reset behavior.
+- **Analytics** — a manager-facing dashboard, entirely computed from existing data (no extra
+  tracking needed): total customers/active games/completed games, total RACCASH awarded vs.
+  redeemed vs. still outstanding, a win-tier breakdown with a win-rate percentage, a
+  redemptions-per-week bar chart for the last 6 weeks, average weeks-to-redeem, how many
+  customers have drawn this week, and a most-engaged-customers leaderboard by lifetime balls
+  drawn. `weeksPlayed` is stamped onto a game's record the moment it closes (in
+  `closeOutGame`) specifically so this stat survives archiving — the live `sessionLog` itself
+  isn't kept once a game is closed.
 
 ## Running it locally
 

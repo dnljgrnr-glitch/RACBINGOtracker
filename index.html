@@ -29,6 +29,7 @@
     <button class="tab-btn active" data-tab="game">Play Round</button>
     <button class="tab-btn" data-tab="roster">Roster</button>
     <button class="tab-btn" data-tab="history">History</button>
+    <button class="tab-btn" data-tab="analytics">Analytics</button>
     <button class="tab-btn" data-tab="help">Help</button>
     <button type="button" id="logoutBtn" class="tab-btn logout-btn">Log Out</button>
   </nav>
@@ -146,6 +147,36 @@
     <div class="history-summary" id="historySummary"></div>
     <div class="history-list" id="historyList"></div>
     <p id="noHistory" class="empty-state" hidden>No completed rounds yet.</p>
+  </section>
+
+  <!-- ANALYTICS TAB -->
+  <section id="tab-analytics" class="tab-panel">
+    <div class="panel-box">
+      <h2 class="section-heading">Overview</h2>
+      <div class="stat-tiles" id="statTiles"></div>
+    </div>
+
+    <div class="panel-box">
+      <h2 class="section-heading">Win Breakdown</h2>
+      <p class="hint-text" id="winRateText"></p>
+      <div class="tier-breakdown-list" id="tierBreakdownList"></div>
+    </div>
+
+    <div class="panel-box">
+      <h2 class="section-heading">Redemptions — Last 6 Weeks</h2>
+      <div class="week-trend-chart" id="weekTrendChart"></div>
+    </div>
+
+    <div class="panel-box">
+      <h2 class="section-heading">Engagement</h2>
+      <div class="stat-tiles" id="engagementTiles"></div>
+    </div>
+
+    <div class="panel-box">
+      <h2 class="section-heading">Most Engaged Customers</h2>
+      <div class="top-players-list" id="topPlayersList"></div>
+      <p id="noTopPlayers" class="empty-state" hidden>No activity recorded yet.</p>
+    </div>
   </section>
 
   <!-- HELP TAB -->

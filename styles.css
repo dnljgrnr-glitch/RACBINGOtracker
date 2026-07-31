@@ -1029,6 +1029,68 @@ input[type="number"], input[type="text"], input[type="search"], input[type="pass
 .cb-contact { font-size: 0.46rem; font-weight: 700; line-height: 1.4; text-align: center; }
 .cb-legal { font-size: 0.4rem; opacity: 0.9; text-align: right; max-width: 120px; }
 
+/* Analytics tab */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+.stat-tile {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  text-align: center;
+}
+.stat-tile-value { font-size: 1.6rem; font-weight: 900; color: var(--accent); }
+.stat-tile-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tier-breakdown-list { display: flex; flex-direction: column; gap: 8px; }
+.tier-breakdown-row { display: flex; align-items: center; gap: 10px; }
+.tier-breakdown-label { width: 110px; font-size: 0.85rem; color: var(--text-dim); flex-shrink: 0; }
+.tier-breakdown-bar-wrap {
+  flex: 1;
+  height: 18px;
+  background: var(--panel-alt);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.tier-breakdown-bar-fill { height: 100%; background: var(--hit); border-radius: 999px; }
+.tier-breakdown-count { width: 44px; text-align: right; font-size: 0.85rem; font-weight: 700; flex-shrink: 0; }
+
+.week-trend-chart { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding-top: 10px; }
+.week-trend-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+}
+.week-trend-count { font-size: 0.8rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.week-trend-bar { width: 100%; max-width: 44px; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 3px; }
+.week-trend-label { font-size: 0.7rem; color: var(--text-dim); margin-top: 6px; }
+
+.top-players-list { display: flex; flex-direction: column; gap: 8px; }
+.top-player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-alt);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+.top-player-name { font-weight: 700; }
+.top-player-stats { color: var(--text-dim); font-size: 0.82rem; white-space: nowrap; }
+
 /* Help tab */
 .help-panel { max-width: 720px; }
 .help-title {

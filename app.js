@@ -516,6 +516,9 @@
       draws: game.draws.slice(),
       card: JSON.parse(JSON.stringify(customer.card)),
       wins: game.wins.slice(),
+      // Kept for the Analytics tab's "average weeks to redeem" stat — the
+      // live sessionLog itself doesn't survive archiving, just its count.
+      weeksPlayed: game.sessionLog.length,
       redeemed: true,
       redeemedAt: Date.now()
     });
@@ -629,6 +632,7 @@
     renderPlayRoundTab();
     renderRoster();
     renderHistory();
+    renderAnalyticsTab();
     processWinPopupQueue();
   }
 
@@ -1408,6 +1412,151 @@
     const onOk = () => cleanup();
     okBtn.addEventListener("click", onOk);
     overlay.hidden = false;
+  }
+
+  // ---------- Analytics ----------
+  // Everything here is derived, read-only reporting over customers/history —
+  // no new state, just answers the questions a manager actually has: is the
+  // promotion working, how much is on the hook, who's engaged.
+
+  function computeAnalytics() {
+    const totalCustomers = state.customers.length;
+    const activeGameCustomers = state.customers.filter(c => c.activeGame);
+    const totalActiveGames = activeGameCustomers.length;
+    const closedGames = state.history;
+    const totalCompletedGames = closedGames.length;
+
+    let totalRedeemed = 0;
+    let totalUnredeemedClosed = 0;
+    const tierCounts = { 0: 0, 25: 0, 75: 0, 100: 0, 200: 0 };
+    let otherTierCount = 0;
+    closedGames.forEach(round => {
+      const total = roundTotal(round.wins);
+      if (round.redeemed) totalRedeemed += total; else totalUnredeemedClosed += total;
+      if (tierCounts[total] !== undefined) tierCounts[total]++;
+      else otherTierCount++;
+    });
+
+    let totalPendingActive = 0;
+    activeGameCustomers.forEach(c => { totalPendingActive += roundTotal(c.activeGame.wins); });
+    const totalPending = totalPendingActive + totalUnredeemedClosed;
+    const totalAwarded = totalRedeemed + totalPending;
+
+    const winRate = totalCompletedGames > 0
+      ? Math.round(((totalCompletedGames - tierCounts[0]) / totalCompletedGames) * 100)
+      : null;
+
+    const tracked = closedGames.filter(r => typeof r.weeksPlayed === "number");
+    const avgWeeksToRedeem = tracked.length
+      ? Math.round((tracked.reduce((sum, r) => sum + r.weeksPlayed, 0) / tracked.length) * 10) / 10
+      : null;
+
+    const playedThisWeekCount = state.customers.filter(c => playedThisWeek(c)).length;
+
+    // Redemptions per week, oldest to newest, last 6 weeks (by redeemedAt).
+    const weeks = [];
+    for (let i = 5; i >= 0; i--) {
+      const weekStart = Date.now() - (i + 1) * WEEK_MS;
+      const weekEnd = Date.now() - i * WEEK_MS;
+      const count = closedGames.filter(r => r.redeemed && r.redeemedAt >= weekStart && r.redeemedAt < weekEnd).length;
+      weeks.push({ label: i === 0 ? "This wk" : `-${i}w`, count });
+    }
+
+    // Lifetime engagement per customer: every ball they've ever drawn,
+    // across all their closed games plus whatever's in progress now.
+    const engagement = state.customers.map(c => {
+      const closed = roundsFor(c.id);
+      const closedBalls = closed.reduce((sum, r) => sum + r.draws.length, 0);
+      const closedWon = closed.reduce((sum, r) => sum + roundTotal(r.wins), 0);
+      const activeBalls = c.activeGame ? c.activeGame.draws.length : 0;
+      const activeWon = c.activeGame ? roundTotal(c.activeGame.wins) : 0;
+      return { name: c.name, totalBalls: closedBalls + activeBalls, totalWon: closedWon + activeWon };
+    }).filter(e => e.totalBalls > 0)
+      .sort((a, b) => b.totalBalls - a.totalBalls)
+      .slice(0, 10);
+
+    return {
+      totalCustomers, totalActiveGames, totalCompletedGames,
+      totalAwarded, totalRedeemed, totalPending,
+      tierCounts, otherTierCount, winRate, avgWeeksToRedeem,
+      playedThisWeekCount, weeks, engagement
+    };
+  }
+
+  function statTile(value, label) {
+    const tile = document.createElement("div");
+    tile.className = "stat-tile";
+    const v = document.createElement("div");
+    v.className = "stat-tile-value";
+    v.textContent = value;
+    const l = document.createElement("div");
+    l.className = "stat-tile-label";
+    l.textContent = label;
+    tile.appendChild(v);
+    tile.appendChild(l);
+    return tile;
+  }
+
+  function renderAnalyticsTab() {
+    const a = computeAnalytics();
+
+    const statTiles = document.getElementById("statTiles");
+    statTiles.innerHTML = "";
+    statTiles.appendChild(statTile(a.totalCustomers, "Total Customers"));
+    statTiles.appendChild(statTile(a.totalActiveGames, "Active Games"));
+    statTiles.appendChild(statTile(a.totalCompletedGames, "Completed Games"));
+    statTiles.appendChild(statTile(`$${a.totalAwarded}`, "Total Awarded"));
+    statTiles.appendChild(statTile(`$${a.totalRedeemed}`, "Redeemed"));
+    statTiles.appendChild(statTile(`$${a.totalPending}`, "Outstanding"));
+
+    const tierLabels = [["0", "No Win"], ["25", "Line — $25"], ["75", "Corners — $75"], ["100", "Full — $100"], ["200", "Blackout — $200"]];
+    const maxCount = Math.max(1, ...tierLabels.map(([key]) => a.tierCounts[key]));
+    const tierList = document.getElementById("tierBreakdownList");
+    tierList.innerHTML = "";
+    tierLabels.forEach(([key, label]) => {
+      const count = a.tierCounts[key];
+      const row = document.createElement("div");
+      row.className = "tier-breakdown-row";
+      row.innerHTML = `
+        <span class="tier-breakdown-label">${label}</span>
+        <span class="tier-breakdown-bar-wrap"><span class="tier-breakdown-bar-fill" style="width:${Math.round((count / maxCount) * 100)}%"></span></span>
+        <span class="tier-breakdown-count">${count}</span>`;
+      tierList.appendChild(row);
+    });
+    document.getElementById("winRateText").textContent = a.winRate === null
+      ? "No completed games yet."
+      : `${a.winRate}% of completed games ended with a win.`;
+
+    const maxWeekCount = Math.max(1, ...a.weeks.map(w => w.count));
+    const chart = document.getElementById("weekTrendChart");
+    chart.innerHTML = "";
+    a.weeks.forEach(w => {
+      const col = document.createElement("div");
+      col.className = "week-trend-bar-col";
+      col.innerHTML = `
+        <div class="week-trend-count">${w.count}</div>
+        <div class="week-trend-bar" style="height:${Math.round((w.count / maxWeekCount) * 100)}%"></div>
+        <div class="week-trend-label">${w.label}</div>`;
+      chart.appendChild(col);
+    });
+
+    const engagementTiles = document.getElementById("engagementTiles");
+    engagementTiles.innerHTML = "";
+    engagementTiles.appendChild(statTile(a.avgWeeksToRedeem === null ? "—" : a.avgWeeksToRedeem, "Avg Weeks to Redeem"));
+    engagementTiles.appendChild(statTile(`${a.playedThisWeekCount}/${a.totalCustomers}`, "Drawn This Week"));
+
+    const topList = document.getElementById("topPlayersList");
+    const noTop = document.getElementById("noTopPlayers");
+    topList.innerHTML = "";
+    noTop.hidden = a.engagement.length !== 0;
+    a.engagement.forEach(e => {
+      const row = document.createElement("div");
+      row.className = "top-player-row";
+      row.innerHTML = `
+        <span class="top-player-name">${escapeHtml(e.name)}</span>
+        <span class="top-player-stats">${e.totalBalls} balls drawn · $${e.totalWon} won</span>`;
+      topList.appendChild(row);
+    });
   }
 
   // ---------- Win celebration ----------
