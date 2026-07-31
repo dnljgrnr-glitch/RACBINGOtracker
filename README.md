@@ -154,8 +154,10 @@ handles more than one trusted machine.
   redeemed vs. still outstanding, a win-tier breakdown with a win-rate percentage, a
   redemptions-over-time bar chart with **Weekly / Monthly / Yearly** filter buttons (each bar
   shows both the count and the $ total, horizontally scrollable, spans your full history
-  automatically — no hardcoded window), average weeks-to-redeem, how many customers have
-  drawn this week, and a most-engaged-customers leaderboard by lifetime balls drawn.
+  automatically — no hardcoded window), **average wins per week** (winning redemptions only —
+  a $0 close-out doesn't count — divided by weeks since the first win, the direct answer to
+  "are we hitting the target winner cadence"), average weeks-to-redeem, how many customers
+  have drawn this week, and a most-engaged-customers leaderboard by lifetime balls drawn.
   `weeksPlayed` is stamped onto a game's record the moment it closes (in
   `closeOutGame`) specifically so this stat survives archiving — the live `sessionLog` itself
   isn't kept once a game is closed. The tab also lists **Customers to Re-Engage** — anyone

@@ -922,7 +922,7 @@
           if (!drawnSet.has(n) && !cagedNums.has(n)) {
             const canvas = document.getElementById("ballCageCanvas");
             const cx = canvas.width / 2, cy = canvas.height / 2;
-            const speed = 0.9 + Math.random() * 1.3;
+            const speed = randomCageSpeed();
             const dir = Math.random() * Math.PI * 2;
             cageBalls.push({ num: n, x: cx, y: cy, vx: Math.cos(dir) * speed, vy: Math.sin(dir) * speed, radius: 11, color: BALL_COLORS[columnForNumber(n)] });
           }
@@ -1498,6 +1498,17 @@
       ? Math.round((tracked.reduce((sum, r) => sum + r.weeksPlayed, 0) / tracked.length) * 10) / 10
       : null;
 
+    // How many actual winning redemptions land per week, on average, since
+    // the first one — the direct answer to "are we hitting our 1-2/week
+    // target." Deliberately excludes $0 close-outs (no win, just reset).
+    const winningGames = closedGames.filter(r => r.redeemed && r.redeemedAt && r.wins.length > 0);
+    let avgWinsPerWeek = null;
+    if (winningGames.length > 0) {
+      const earliestWin = Math.min(...winningGames.map(r => r.redeemedAt));
+      const weeksElapsed = Math.max(1, (Date.now() - earliestWin) / WEEK_MS);
+      avgWinsPerWeek = Math.round((winningGames.length / weeksElapsed) * 10) / 10;
+    }
+
     const playedThisWeekCount = state.customers.filter(c => playedThisWeek(c)).length;
 
     // Lifetime engagement per customer: every ball they've ever drawn,
@@ -1516,7 +1527,7 @@
     return {
       totalCustomers, totalActiveGames, totalCompletedGames,
       totalAwarded, totalRedeemed, totalPending,
-      tierCounts, otherTierCount, winRate, avgWeeksToRedeem,
+      tierCounts, otherTierCount, winRate, avgWeeksToRedeem, avgWinsPerWeek,
       playedThisWeekCount, engagement
     };
   }
@@ -1657,6 +1668,7 @@
 
     const engagementTiles = document.getElementById("engagementTiles");
     engagementTiles.innerHTML = "";
+    engagementTiles.appendChild(statTile(a.avgWinsPerWeek === null ? "—" : a.avgWinsPerWeek, "Avg Wins / Week"));
     engagementTiles.appendChild(statTile(a.avgWeeksToRedeem === null ? "—" : a.avgWeeksToRedeem, "Avg Weeks to Redeem"));
     engagementTiles.appendChild(statTile(`${a.playedThisWeekCount}/${a.totalCustomers}`, "Drawn This Week"));
 
@@ -1800,6 +1812,14 @@
   // a number that came out of the real machine.
 
   const BALL_COLORS = { B: "#2ea043", I: "#c8102e", N: "#2b6cb0", G: "#d4a017", O: "#7c3aed" };
+  // Slow enough that staff can visually track one specific ball as it
+  // bounces, not just a blur of motion.
+  const CAGE_BALL_SPEED_MIN = 0.3;
+  const CAGE_BALL_SPEED_RANGE = 0.5;
+
+  function randomCageSpeed() {
+    return CAGE_BALL_SPEED_MIN + Math.random() * CAGE_BALL_SPEED_RANGE;
+  }
 
   function columnForNumber(num) {
     return COLUMNS.find(col => num >= COLUMN_RANGES[col][0] && num <= COLUMN_RANGES[col][1]);
@@ -1818,7 +1838,7 @@
     cageBalls = remainingNumbers.map(num => {
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * (cageRadius - 12);
-      const speed = 0.9 + Math.random() * 1.3;
+      const speed = randomCageSpeed();
       const dir = Math.random() * Math.PI * 2;
       return {
         num,
