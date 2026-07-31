@@ -706,6 +706,7 @@
       picker.hidden = false;
       idleCagePanel.hidden = false;
       startIdleCage();
+      renderIdlePracticeArea();
       panel.hidden = true;
       active.hidden = true;
       return;
@@ -2026,7 +2027,10 @@
     if (idleCageAnimId) return;
     const canvas = document.getElementById("idleCageCanvas");
     if (!canvas) return;
-    if (idleCageBalls.length === 0) {
+    // Only fill on a genuinely fresh cage. Once practice pulls have started,
+    // an empty pool means every ball is out — refilling there would silently
+    // undo the pulls instead of waiting for Reset.
+    if (idleCageBalls.length === 0 && idleDrawnNumbers.length === 0) {
       const cx = canvas.width / 2, cy = canvas.height / 2;
       const cageRadius = Math.min(canvas.width, canvas.height) / 2 - 16;
       for (let n = 1; n <= 75; n++) {
@@ -2051,6 +2055,193 @@
   function stopIdleCage() {
     if (idleCageAnimId) cancelAnimationFrame(idleCageAnimId);
     idleCageAnimId = null;
+  }
+
+  // ---------- Practice pulls (idle screen only) ----------
+  // A real draw the staff can do for fun, to demo the game, or to warm a
+  // customer up — deliberately wired to nothing. No customer, no card, no
+  // save; it only ever touches idleCageBalls and its own tray.
+
+  // Ramp surfaces the ball rolls down, as line segments on the track canvas.
+  const TRACK_RAMPS = [
+    [[28, 45], [300, 85]],
+    [[312, 112], [40, 152]],
+    [[28, 178], [172, 208]]
+  ];
+  const TRACK_BALL_R = 11;
+  // Ball-center waypoints: alternating short falls and longer rolls, ending
+  // in a drop off the bottom edge into the tray below.
+  const TRACK_PATH = [
+    { from: [38, -20], to: [38, 35], ms: 180, roll: false },
+    { from: [38, 35], to: [300, 74], ms: 420, roll: true },
+    { from: [300, 74], to: [308, 101], ms: 130, roll: false },
+    { from: [308, 101], to: [44, 141], ms: 420, roll: true },
+    { from: [44, 141], to: [36, 167], ms: 130, roll: false },
+    { from: [36, 167], to: [172, 197], ms: 300, roll: true },
+    { from: [172, 197], to: [172, 250], ms: 200, roll: false }
+  ];
+
+  let idleDrawnNumbers = [];
+  let idlePullInFlight = false;
+  let audioCtx = null;
+
+  // Synthesized rather than an audio file — keeps the app a single folder
+  // of static files with nothing extra to load, and it's a click, not music.
+  function playTick(freq, durationSec, volume) {
+    try {
+      if (!audioCtx) {
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return;
+        audioCtx = new Ctor();
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + durationSec);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + durationSec);
+    } catch (e) {
+      // Audio is a flourish — never let it break the actual draw.
+    }
+  }
+
+  function buzz(ms) {
+    if (navigator.vibrate) {
+      try { navigator.vibrate(ms); } catch (e) { /* unsupported, ignore */ }
+    }
+  }
+
+  function drawIdleTrack(ball) {
+    const canvas = document.getElementById("idleTrackCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.lineCap = "round";
+    TRACK_RAMPS.forEach(([[x1, y1], [x2, y2]]) => {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = "rgba(255,255,255,0.16)";
+      ctx.lineWidth = 7;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = "rgba(255,183,3,0.5)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+
+    if (!ball) return;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, TRACK_BALL_R, 0, Math.PI * 2);
+    ctx.fillStyle = ball.color;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 10px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(ball.num, ball.x, ball.y);
+  }
+
+  function animateTrackBall(ballMeta, onDone) {
+    let seg = 0;
+    let segStart = performance.now();
+
+    function frame(now) {
+      const s = TRACK_PATH[seg];
+      let t = Math.min(1, (now - segStart) / s.ms);
+      // Falls accelerate, rolls glide — enough to read as gravity without
+      // pretending to be a physics engine.
+      const eased = s.roll ? t : t * t;
+      const x = s.from[0] + (s.to[0] - s.from[0]) * eased;
+      const y = s.from[1] + (s.to[1] - s.from[1]) * eased;
+      drawIdleTrack({ x, y, num: ballMeta.num, color: ballMeta.color });
+
+      if (t >= 1) {
+        seg++;
+        segStart = now;
+        if (seg < TRACK_PATH.length) {
+          // Contact with the next ramp: tick + a short haptic tap.
+          if (TRACK_PATH[seg].roll) {
+            playTick(520 + seg * 60, 0.06, 0.05);
+            buzz(10);
+          }
+        } else {
+          playTick(880, 0.16, 0.07);
+          buzz(22);
+          drawIdleTrack(null);
+          onDone();
+          return;
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function renderIdleDrawnTray(justLandedNum) {
+    const tray = document.getElementById("idleDrawnTray");
+    if (!tray) return;
+    tray.innerHTML = "";
+    idleDrawnNumbers.forEach(num => {
+      const el = document.createElement("div");
+      el.className = "idle-drawn-ball";
+      if (num === justLandedNum) el.classList.add("just-landed");
+      el.style.background = BALL_COLORS[columnForNumber(num)];
+      el.textContent = num;
+      tray.appendChild(el);
+    });
+  }
+
+  function idlePullBall() {
+    if (idlePullInFlight || idleCageBalls.length === 0) return;
+    idlePullInFlight = true;
+    const pullBtn = document.getElementById("idlePullBtn");
+    pullBtn.disabled = true;
+
+    const idx = Math.floor(Math.random() * idleCageBalls.length);
+    const [picked] = idleCageBalls.splice(idx, 1);
+    playTick(320, 0.05, 0.045);
+    buzz(14);
+
+    animateTrackBall(picked, () => {
+      idleDrawnNumbers.push(picked.num);
+      renderIdleDrawnTray(picked.num);
+      idlePullInFlight = false;
+      pullBtn.disabled = idleCageBalls.length === 0;
+      document.getElementById("idleResetBtn").disabled = false;
+    });
+  }
+
+  // Repaints the static track and syncs the two buttons — called whenever
+  // the idle screen comes back into view, since a mid-flight pull can't
+  // survive navigating away.
+  function renderIdlePracticeArea() {
+    if (!idlePullInFlight) drawIdleTrack(null);
+    renderIdleDrawnTray(null);
+    document.getElementById("idlePullBtn").disabled = idlePullInFlight || idleCageBalls.length === 0;
+    document.getElementById("idleResetBtn").disabled = idleDrawnNumbers.length === 0;
+  }
+
+  function resetIdleCage() {
+    idleCageBalls = [];
+    idleDrawnNumbers = [];
+    renderIdleDrawnTray(null);
+    drawIdleTrack(null);
+    stopIdleCage();
+    startIdleCage();
+    document.getElementById("idlePullBtn").disabled = false;
+    document.getElementById("idleResetBtn").disabled = true;
   }
 
   function showRevealedBall(ball) {
@@ -2568,6 +2759,9 @@
     document.querySelectorAll("#trendFilterRow .chart-filter-btn").forEach(b => b.classList.toggle("active", b === btn));
     renderAnalyticsTab();
   });
+
+  document.getElementById("idlePullBtn").addEventListener("click", idlePullBall);
+  document.getElementById("idleResetBtn").addEventListener("click", resetIdleCage);
 
   document.getElementById("clearAllReengageBtn").addEventListener("click", () => {
     const pending = computeReengagementList();

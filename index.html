@@ -58,7 +58,13 @@
 
     <div id="idleCagePanel" class="panel-box idle-cage-panel" hidden>
       <canvas id="idleCageCanvas" width="380" height="380"></canvas>
-      <p class="hint-text idle-cage-caption">Search for a customer above to start pulling their numbers.</p>
+      <canvas id="idleTrackCanvas" width="340" height="240"></canvas>
+      <div class="idle-draw-actions">
+        <button type="button" id="idlePullBtn" class="btn btn-primary btn-big">Pull Ball</button>
+        <button type="button" id="idleResetBtn" class="btn btn-ghost">Reset</button>
+      </div>
+      <div class="idle-drawn-tray" id="idleDrawnTray"></div>
+      <p class="hint-text idle-cage-caption">Practice pulls — nothing here is recorded. Search for a customer above to play a real card.</p>
     </div>
 
     <div id="customerPanel" class="panel-box" hidden>
