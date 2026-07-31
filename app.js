@@ -6,6 +6,11 @@
   const COLUMN_RANGES = { B: [1, 15], I: [16, 30], N: [31, 45], G: [46, 60], O: [61, 75] };
   const FREE = "FREE";
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  // How long since a customer's last drawn ball before the Analytics tab
+  // flags them as worth a re-engagement text — deliberately looser than
+  // "played this week" (1 week idle is just normal pacing, not a lost
+  // customer). Adjust here if 2 weeks turns out to be the wrong cutoff.
+  const REENGAGEMENT_THRESHOLD_MS = 2 * WEEK_MS;
 
   const PRIZES = { LINE: 25, CORNERS: 75, BLACKOUT: 100 };
   const TIER_KEYS = ["LINE", "CORNERS", "BLACKOUT"];
@@ -1483,6 +1488,22 @@
     };
   }
 
+  // Customers who HAVE played before but have gone quiet longer than the
+  // re-engagement threshold — deliberately excludes anyone who's never
+  // played at all (they were never "engaged" to begin with, that's a
+  // different problem than winning someone back). Actual texting happens
+  // outside this app; this just answers "who, and how long."
+  function computeReengagementList() {
+    return state.customers
+      .filter(c => c.lastPlayedAt && (Date.now() - c.lastPlayedAt) >= REENGAGEMENT_THRESHOLD_MS)
+      .sort((a, b) => a.lastPlayedAt - b.lastPlayedAt)
+      .map(c => ({
+        name: c.name,
+        lastPlayedAt: c.lastPlayedAt,
+        weeksSince: Math.floor((Date.now() - c.lastPlayedAt) / WEEK_MS)
+      }));
+  }
+
   function statTile(value, label) {
     const tile = document.createElement("div");
     tile.className = "stat-tile";
@@ -1556,6 +1577,20 @@
         <span class="top-player-name">${escapeHtml(e.name)}</span>
         <span class="top-player-stats">${e.totalBalls} balls drawn · $${e.totalWon} won</span>`;
       topList.appendChild(row);
+    });
+
+    const reengage = computeReengagementList();
+    const reengageList = document.getElementById("reengageList");
+    const noReengage = document.getElementById("noReengage");
+    reengageList.innerHTML = "";
+    noReengage.hidden = reengage.length !== 0;
+    reengage.forEach(r => {
+      const row = document.createElement("div");
+      row.className = "top-player-row";
+      row.innerHTML = `
+        <span class="top-player-name">${escapeHtml(r.name)}</span>
+        <span class="top-player-stats">${r.weeksSince} week${r.weeksSince === 1 ? "" : "s"} since last played (${formatDate(r.lastPlayedAt)})</span>`;
+      reengageList.appendChild(row);
     });
   }
 

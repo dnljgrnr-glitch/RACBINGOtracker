@@ -148,7 +148,11 @@ handles more than one trusted machine.
   customers have drawn this week, and a most-engaged-customers leaderboard by lifetime balls
   drawn. `weeksPlayed` is stamped onto a game's record the moment it closes (in
   `closeOutGame`) specifically so this stat survives archiving — the live `sessionLog` itself
-  isn't kept once a game is closed.
+  isn't kept once a game is closed. The tab also lists **Customers to Re-Engage** — anyone
+  who's played before but gone quiet for more than 2 weeks (`REENGAGEMENT_THRESHOLD_MS` in
+  `app.js`), sorted most-overdue first, so staff know who's worth a text. This app doesn't
+  send anything itself or store any contact info — it's just a name and how long it's been,
+  for whatever outside channel staff already use to reach customers.
 
 ## Running it locally
 
