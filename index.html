@@ -163,8 +163,16 @@
     </div>
 
     <div class="panel-box">
-      <h2 class="section-heading">Redemptions — Last 6 Weeks</h2>
-      <div class="week-trend-chart" id="weekTrendChart"></div>
+      <h2 class="section-heading">Redemptions Over Time</h2>
+      <div class="chart-filter-row" id="trendFilterRow">
+        <button type="button" class="chart-filter-btn active" data-mode="week">Weekly</button>
+        <button type="button" class="chart-filter-btn" data-mode="month">Monthly</button>
+        <button type="button" class="chart-filter-btn" data-mode="year">Yearly</button>
+      </div>
+      <div class="week-trend-chart-wrap">
+        <div class="week-trend-chart" id="weekTrendChart"></div>
+      </div>
+      <p id="noTrendData" class="empty-state" hidden>No redemptions recorded yet.</p>
     </div>
 
     <div class="panel-box">
@@ -180,9 +188,9 @@
 
     <div class="panel-box">
       <h2 class="section-heading">Customers to Re-Engage</h2>
-      <p class="hint-text">Played before, but nothing in over 2 weeks — worth a text to bring them back in. (Contact info is handled outside this app; this is just who and how long.)</p>
+      <p class="hint-text">Played before, but nothing in over 3 weeks — worth a text to bring them back in. (Contact info is handled outside this app; this is just who and how long.)</p>
       <div class="top-players-list" id="reengageList"></div>
-      <p id="noReengage" class="empty-state" hidden>Nobody's overdue — everyone active has played within 2 weeks.</p>
+      <p id="noReengage" class="empty-state" hidden>Nobody's overdue — everyone active has played within 3 weeks.</p>
     </div>
   </section>
 

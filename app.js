@@ -9,8 +9,8 @@
   // How long since a customer's last drawn ball before the Analytics tab
   // flags them as worth a re-engagement text — deliberately looser than
   // "played this week" (1 week idle is just normal pacing, not a lost
-  // customer). Adjust here if 2 weeks turns out to be the wrong cutoff.
-  const REENGAGEMENT_THRESHOLD_MS = 2 * WEEK_MS;
+  // customer). Adjust here if 3 weeks turns out to be the wrong cutoff.
+  const REENGAGEMENT_THRESHOLD_MS = 3 * WEEK_MS;
 
   const PRIZES = { LINE: 25, CORNERS: 75, BLACKOUT: 100 };
   const TIER_KEYS = ["LINE", "CORNERS", "BLACKOUT"];
@@ -1458,15 +1458,6 @@
 
     const playedThisWeekCount = state.customers.filter(c => playedThisWeek(c)).length;
 
-    // Redemptions per week, oldest to newest, last 6 weeks (by redeemedAt).
-    const weeks = [];
-    for (let i = 5; i >= 0; i--) {
-      const weekStart = Date.now() - (i + 1) * WEEK_MS;
-      const weekEnd = Date.now() - i * WEEK_MS;
-      const count = closedGames.filter(r => r.redeemed && r.redeemedAt >= weekStart && r.redeemedAt < weekEnd).length;
-      weeks.push({ label: i === 0 ? "This wk" : `-${i}w`, count });
-    }
-
     // Lifetime engagement per customer: every ball they've ever drawn,
     // across all their closed games plus whatever's in progress now.
     const engagement = state.customers.map(c => {
@@ -1484,8 +1475,61 @@
       totalCustomers, totalActiveGames, totalCompletedGames,
       totalAwarded, totalRedeemed, totalPending,
       tierCounts, otherTierCount, winRate, avgWeeksToRedeem,
-      playedThisWeekCount, weeks, engagement
+      playedThisWeekCount, engagement
     };
+  }
+
+  // Redemption counts (and $ totals) bucketed by calendar period, spanning
+  // from the earliest redemption on record to now — not a fixed window, so
+  // it scales from a few weeks of data up to a full year without code
+  // changes. Empty history returns no buckets rather than a zeroed chart.
+  function computeRedemptionTrend(mode) {
+    const redemptions = state.history.filter(r => r.redeemed && r.redeemedAt);
+    if (redemptions.length === 0) return [];
+
+    const bucketSums = (start, end) => {
+      const inBucket = redemptions.filter(r => r.redeemedAt >= start && r.redeemedAt < end);
+      return { count: inBucket.length, total: inBucket.reduce((sum, r) => sum + roundTotal(r.wins), 0) };
+    };
+
+    const earliest = Math.min(...redemptions.map(r => r.redeemedAt));
+    const now = Date.now();
+    const buckets = [];
+
+    if (mode === "year") {
+      const startYear = new Date(earliest).getFullYear();
+      const endYear = new Date(now).getFullYear();
+      for (let y = startYear; y <= endYear; y++) {
+        const start = new Date(y, 0, 1).getTime();
+        const end = new Date(y + 1, 0, 1).getTime();
+        buckets.push({ label: String(y), ...bucketSums(start, end) });
+      }
+    } else if (mode === "month") {
+      const startDate = new Date(earliest);
+      let y = startDate.getFullYear();
+      let m = startDate.getMonth();
+      const endDate = new Date(now);
+      const endY = endDate.getFullYear();
+      const endM = endDate.getMonth();
+      while (y < endY || (y === endY && m <= endM)) {
+        const start = new Date(y, m, 1).getTime();
+        const end = new Date(y, m + 1, 1).getTime();
+        buckets.push({ label: new Date(y, m, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" }), ...bucketSums(start, end) });
+        m++;
+        if (m > 11) { m = 0; y++; }
+      }
+    } else {
+      const start0 = new Date(earliest);
+      start0.setHours(0, 0, 0, 0);
+      let cursor = start0.getTime();
+      while (cursor <= now) {
+        const end = cursor + WEEK_MS;
+        buckets.push({ label: new Date(cursor).toLocaleDateString(undefined, { month: "short", day: "numeric" }), ...bucketSums(cursor, end) });
+        cursor = end;
+      }
+    }
+
+    return buckets;
   }
 
   // Customers who HAVE played before but have gone quiet longer than the
@@ -1518,6 +1562,8 @@
     return tile;
   }
 
+  let analyticsTrendMode = "week";
+
   function renderAnalyticsTab() {
     const a = computeAnalytics();
 
@@ -1548,16 +1594,22 @@
       ? "No completed games yet."
       : `${a.winRate}% of completed games ended with a win.`;
 
-    const maxWeekCount = Math.max(1, ...a.weeks.map(w => w.count));
+    const trend = computeRedemptionTrend(analyticsTrendMode);
     const chart = document.getElementById("weekTrendChart");
+    const chartWrap = document.querySelector(".week-trend-chart-wrap");
+    const noTrendData = document.getElementById("noTrendData");
     chart.innerHTML = "";
-    a.weeks.forEach(w => {
+    noTrendData.hidden = trend.length !== 0;
+    chartWrap.hidden = trend.length === 0;
+    const maxTrendCount = Math.max(1, ...trend.map(w => w.count));
+    trend.forEach(w => {
       const col = document.createElement("div");
       col.className = "week-trend-bar-col";
       col.innerHTML = `
         <div class="week-trend-count">${w.count}</div>
-        <div class="week-trend-bar" style="height:${Math.round((w.count / maxWeekCount) * 100)}%"></div>
-        <div class="week-trend-label">${w.label}</div>`;
+        <div class="week-trend-bar" style="height:${Math.round((w.count / maxTrendCount) * 100)}%"></div>
+        <div class="week-trend-label">${w.label}</div>
+        <div class="week-trend-dollar">$${w.total}</div>`;
       chart.appendChild(col);
     });
 
@@ -2152,6 +2204,14 @@
       ? `Redeem $${total} RACCASH for ${customer.name} and start them on a brand new card? This closes out their current game.`
       : `Close out ${customer.name}'s current card with no win and start them on a brand new one? This cannot be undone.`;
     showConfirm(message, () => closeOutGame(customer.id));
+  });
+
+  document.getElementById("trendFilterRow").addEventListener("click", e => {
+    const btn = e.target.closest(".chart-filter-btn");
+    if (!btn) return;
+    analyticsTrendMode = btn.dataset.mode;
+    document.querySelectorAll("#trendFilterRow .chart-filter-btn").forEach(b => b.classList.toggle("active", b === btn));
+    renderAnalyticsTab();
   });
 
   document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
